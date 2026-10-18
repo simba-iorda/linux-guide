@@ -141,7 +141,7 @@ sudo ufw status verbose
 1. `sudo ss -tulpn` — что слушает порты наружу. Всё ли это тебе нужно?
 2. Обнови систему: `apt update && apt upgrade` (или `dnf upgrade`, `pacman -Syu`).
 3. `sudo ufw status` или `sudo firewall-cmd --list-all` — чем защищена твоя машина? Если ничего — включи файрвол, разрешив SSH/локальные службы.
-4. `awk -F: '$3 == 0 {print $1}' /etc/passwd` — у кого UID 0. Должен быть только `root`.
+4. `awk -F: '$3 == 0 {print $1}' /etc/passwd` — у кого UID 0 (`awk` — маленький фильтр по столбцам: он печатает имя из строк, где третье поле, UID, равно нулю). Должен быть только `root`.
 5. `sudo lastb | head` и `sudo journalctl _COMM=sshd | grep -i failed | tail` — были ли попытки подбора.
 6. Проверь права на свои секреты: `ls -l ~/.ssh ~/.ssh/id_*`. Каталог — `700`, приватный ключ — `600`.
 

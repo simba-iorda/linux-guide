@@ -171,7 +171,7 @@ sudo systemctl enable --now myapp
 
 ## <details><summary>🤓 Для любопытных</summary>
 
-- **Таймеры вместо cron**: пара `backup.service` + `backup.timer` даёт расписание с логами, зависимостями и лимитами. `systemctl list-timers` — расписание, `systemd-analyze calendar "Mon..Fri *-*-* 09:00"` — проверить выражение.
+- **Таймеры вместо cron** (cron — планировщик задач по расписанию, подробно в уроке 34): пара `backup.service` + `backup.timer` даёт расписание с логами, зависимостями и лимитами. `systemctl list-timers` — расписание, `systemd-analyze calendar "Mon..Fri *-*-* 09:00"` — проверить выражение.
 - Полезные опции боевой службы: `Restart=on-failure`, `RestartSec=5`, `MemoryMax=512M`, `CPUQuota=50%`, `LimitNOFILE=65536` — systemd умеет ограничивать ресурсы через cgroups.
 - `StartLimitIntervalSec`/`StartLimitBurst` защищают от бесконечного цикла падений и перезапусков.
 - **Изоляция**: `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `NoNewPrivileges=yes`. Оценить: `systemd-analyze security myapp` (0 — отлично, 10 — плохо).
