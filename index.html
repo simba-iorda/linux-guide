@@ -3,15 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Linux с нуля</title>
+  <title>Linux за 2 месяца</title>
+  <link rel="stylesheet" href="assets/vendor/fonts/fonts.css">
   <link rel="stylesheet" href="assets/style.css">
+  <script>
+    /* Ранняя установка темы до рендера, чтобы не было вспышки. */
+    (function () {
+      try {
+        const themes = ['mocha','macchiato','frappe','latte','dracula','nord','gruvbox','tokyonight'];
+        const stored = localStorage.getItem('linux-tutorial-theme');
+        if (stored && themes.includes(stored)) {
+          document.documentElement.dataset.theme = stored;
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="site-header">
     <button id="menu-toggle" class="menu-toggle" aria-label="Открыть меню" aria-expanded="false">☰</button>
-    <h1 class="site-title">Linux с нуля</h1>
+    <h1 class="site-title">Linux за 2 месяца</h1>
     <div class="header-actions">
-      <span class="progress-badge" id="progress-badge">0/12</span>
+      <div id="theme-dots" class="theme-dots" aria-label="Выбор темы"></div>
+      <span class="progress-badge" id="progress-badge">0/40</span>
       <button id="reset-progress" class="reset-btn" title="Сбросить прогресс">Сбросить</button>
     </div>
   </header>
@@ -28,9 +42,17 @@
     <main class="content" id="main">
       <div class="loader" id="global-loader">
         <div class="loader-spinner"></div>
-        <p>Загружаем уроки…</p>
+        <p>Загружаем курс…</p>
       </div>
     </main>
+  </div>
+
+  <div id="onboarding" class="onboarding" hidden>
+    <div class="onboarding-card">
+      <h2>Ты в песочнице</h2>
+      <p>Сломать ничего нельзя. Это терминал-имитатор: пробуй команды, ошибайся и учись. Курс рассчитан на 2 месяца по 30 минут в день.</p>
+      <button id="onboarding-action" class="onboarding-action">Погнали</button>
+    </div>
   </div>
 
   <script src="assets/vendor/marked.min.js"></script>

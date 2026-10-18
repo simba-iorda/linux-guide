@@ -1,8 +1,8 @@
-# Linux с нуля
+# Linux за 2 месяца
 
 Локальный интерактивный учебник по основам Linux. Работает офлайн, без сборки, на чистом HTML/CSS/JS.
 
-Контент основан на шпаргалке [Linux-](https://github.com/justxor/Linux-) (MIT).
+Курс: 8 модулей × 5 уроков, 40 уроков, ~30 минут в день. Контент основан на шпаргалке [Linux-](https://github.com/justxor/Linux-) (MIT).
 
 ## Как запустить
 
@@ -24,14 +24,25 @@ python3 -m http.server 8000 -d ~/linux-tutorial
 http://localhost:8000
 ```
 
+## Возможности v2
+
+- 8 цветовых тем (Catppuccin Mocha/Macchiato/Frappé/Latte, Dracula, Nord, Gruvbox Dark, Tokyo Night) с переключателем в шапке.
+- Шрифт JetBrains Mono для кода, терминала и промптов; системный sans для основного текста.
+- Симулятор терминала в виде окна: светофор, вкладка, режимы оболочки bash/fish/zsh.
+- Новые команды симулятора: `ps`, `kill`, `ping`, `curl` (плюс сохранённые `free`, `uname`, `man`, файловые команды и др.).
+- Сайдбар с уроками, сгруппированными по модулям, прогрессом по модулю и общим счётчиком.
+- Страница «Карта курса» (`#/roadmap`) с целями модулей, списком уроков и прогрессом.
+- Онбординг-оверлей при первом визите.
+
 ## Структура
 
 - `index.html` — главная страница.
-- `assets/style.css` — стили.
-- `assets/js/*.js` — логика: приложение, рендер, квизы, терминал, прогресс.
+- `assets/style.css` — стили и темы.
+- `assets/js/*.js` — логика: приложение, рендер, квизы, терминал, прогресс, темы.
+- `assets/vendor/fonts/fonts.css` + 12 woff2 — JetBrains Mono.
 - `assets/vendor/marked.min.js` — локальный парсер Markdown.
 - `content/lessons/*.md` — уроки (отдельная дорожка).
-- `content/lessons/manifest.json` — порядок уроков.
+- `content/lessons/manifest.json` — модули и порядок уроков.
 - `content/cheatsheet.md` — полный справочник.
 - `start.sh` — скрипт запуска локального сервера.
 - `SPEC.md` — техническое задание.

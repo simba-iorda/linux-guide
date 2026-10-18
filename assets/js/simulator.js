@@ -1,6 +1,7 @@
 /**
- * simulator.js — чистая логика терминала для учебника «Linux с нуля».
+ * simulator.js — чистая логика терминала для учебника «Linux за 2 месяца».
  * Не зависит от DOM, может быть require()-нут из Node для smoke-тестов.
+ * v2: режимы оболочки (bash/fish/zsh), ps/kill/ping/curl, темы через CSS.
  */
 (function () {
   'use strict';
@@ -50,6 +51,26 @@
 
   function expandVars(text) {
     return String(text).replace(/\$(HOME|USER)\b/g, (_, name) => ENV[name]);
+  }
+
+  function abbreviateCwd(cwd) {
+    if (cwd === ENV.HOME) return '~';
+    if (cwd.startsWith(ENV.HOME + '/')) return '~' + cwd.slice(ENV.HOME.length);
+    return cwd;
+  }
+
+  /* ---------- промпты оболочек ---------- */
+  function getPrompt(session) {
+    const d = abbreviateCwd(session.cwd);
+    switch (session.shell) {
+      case 'fish':
+        return `user@linux ${d}>`;
+      case 'zsh':
+        return `${d} ❯`;
+      case 'bash':
+      default:
+        return `user@linux:${d}$`;
+    }
   }
 
   /* ---------- файловая модель ---------- */
@@ -135,6 +156,18 @@
     return copy;
   }
 
+  /* ---------- процессы по умолчанию ---------- */
+  function defaultProcesses() {
+    return [
+      { pid: 1, cmd: 'systemd', user: 'root', cpu: 0.0, mem: 0.1, vsz: 168, rss: 4, time: '00' },
+      { pid: 412, cmd: 'sleep', user: 'user', cpu: 0.0, mem: 0.0, vsz: 4, rss: 1, time: '02' },
+      { pid: 780, cmd: 'bash', user: 'user', cpu: 0.0, mem: 0.1, vsz: 16, rss: 4, time: '00' },
+      { pid: 913, cmd: 'firefox', user: 'user', cpu: 5.2, mem: 8.5, vsz: 1200, rss: 850, time: '15' },
+      { pid: 1024, cmd: 'node', user: 'user', cpu: 2.1, mem: 3.2, vsz: 600, rss: 300, time: '01' },
+      { pid: 2042, cmd: 'python3', user: 'user', cpu: 0.8, mem: 1.5, vsz: 300, rss: 150, time: '00' }
+    ];
+  }
+
   /* ---------- парсер командной строки ---------- */
   function tokenizeSegment(segment) {
     const tokens = [];
@@ -195,6 +228,13 @@
     return `${mo} ${day} ${hr}:${mn}`;
   }
 
+  function fmtTime(mtime) {
+    const d = new Date(mtime);
+    const hr = String(d.getHours()).padStart(2, '0');
+    const mn = String(d.getMinutes()).padStart(2, '0');
+    return `${hr}:${mn}`;
+  }
+
   function humanSize(bytes) {
     if (bytes < 1024) return String(bytes);
     const units = ['K', 'M', 'G', 'T'];
@@ -229,11 +269,13 @@
 
   COMMANDS.clear = () => ({ stdout: '', exit: 0, clear: true });
 
-  COMMANDS.help = () => ({
-    stdout: 'Доступные команды:\n' +
+  COMMANDS.help = (argv, stdin, session) => ({
+    stdout:
+      `Режим оболочки: ${session.shell || 'bash'}\n` +
+      'Доступные команды:\n' +
       '  pwd, ls, cd, cat, head, tail, touch, mkdir, cp, mv, rm\n' +
       '  echo, grep, wc, tree, whoami, date, clear, history, help, man\n' +
-      '  uname, df, free\n',
+      '  uname, df, free, ps, kill, ping, curl\n',
     exit: 0
   });
 
@@ -266,6 +308,82 @@
     };
   };
 
+  COMMANDS.ps = (argv, stdin, session) => {
+    const mode = argv[0] || '';
+    const procs = session.processes || [];
+    if (mode === 'aux') {
+      const header = 'USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND';
+      const rows = procs.map(p => {
+        const user = String(p.user || 'user').padEnd(10);
+        const pid = String(p.pid).padStart(5);
+        const cpu = String(p.cpu.toFixed(1)).padStart(4);
+        const mem = String(p.mem.toFixed(1)).padStart(4);
+        const vsz = String(p.vsz).padStart(5);
+        const rss = String(p.rss).padStart(5);
+        const time = `0:${p.time}`;
+        return `${user} ${pid} ${cpu} ${mem} ${vsz} ${rss} pts/0    S+   ${fmtTime(now())} ${time.padStart(5)} ${p.cmd}`;
+      });
+      return { stdout: [header].concat(rows).join('\n') + '\n', exit: 0 };
+    }
+    const header = '  PID TTY          TIME CMD';
+    const rows = procs.map(p => {
+      const pid = String(p.pid).padStart(5);
+      const time = `00:00:${p.time}`;
+      return `  ${pid} pts/0    ${time} ${p.cmd}`;
+    });
+    return { stdout: [header].concat(rows).join('\n') + '\n', exit: 0 };
+  };
+
+  COMMANDS.kill = (argv, stdin, session) => {
+    if (!argv.length) {
+      return err('kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]');
+    }
+    const errors = [];
+    for (const arg of argv) {
+      const pid = parseInt(arg, 10);
+      if (isNaN(pid)) {
+        errors.push(`bash: kill: ${arg}: arguments must be process or job IDs`);
+        continue;
+      }
+      const idx = (session.processes || []).findIndex(p => p.pid === pid);
+      if (idx === -1) {
+        errors.push(`bash: kill: (${pid}) - No such process`);
+        continue;
+      }
+      session.processes.splice(idx, 1);
+    }
+    if (errors.length) return err(errors.join('\n'));
+    return ok();
+  };
+
+  COMMANDS.ping = (argv) => {
+    const host = argv[0] || 'localhost';
+    const ip = host === 'localhost' ? '127.0.0.1' : '93.184.216.34';
+    const lines = [`PING ${host} (${ip}) 56(84) bytes of data.`];
+    for (let i = 1; i <= 4; i++) {
+      lines.push(`64 bytes from ${ip}: icmp_seq=${i} ttl=64 time=${(38 + i * 3) / 1000} ms`);
+    }
+    lines.push('');
+    lines.push(`--- ${host} ping statistics ---`);
+    lines.push(`4 packets transmitted, 4 received, 0% packet loss, time 3064ms`);
+    lines.push(`rtt min/avg/max/mdev = 0.038/0.041/0.045/0.007 ms`);
+    return { stdout: lines.join('\n') + '\n', exit: 0 };
+  };
+
+  COMMANDS.curl = (argv) => {
+    const url = argv[0] || '';
+    if (!url) return err("curl: try 'curl <URL>'");
+    const html = `<!DOCTYPE html>
+<html>
+<head><title>${url}</title></head>
+<body>
+<h1>It works!</h1>
+<p>You fetched ${url}</p>
+</body>
+</html>`;
+    return { stdout: html + '\n', exit: 0 };
+  };
+
   COMMANDS.man = (argv) => {
     if (!argv[0]) return err('man: what manual page do you want?');
     const pages = {
@@ -295,6 +413,9 @@
       apt: 'apt — package manager for Debian-based systems\n  apt update, apt install, apt remove, apt search, apt list',
       sudo: 'sudo — execute a command as another user\n  sudo -i  start a root shell',
       ps: 'ps — report a snapshot of current processes\n  ps aux  all processes',
+      kill: 'kill — send a signal to a process\n  kill PID',
+      ping: 'ping — send ICMP echo requests\n  ping HOST',
+      curl: 'curl — transfer data from or to a server\n  curl URL',
       rmdir: 'rmdir — remove empty directories'
     };
     const page = pages[argv[0]];
@@ -561,7 +682,7 @@
           else return err(`grep: invalid option -- '${ch}'`);
         }
       } else rest.push(a);
-      }
+    }
     if (!rest.length) return err('grep: missing pattern');
     const patternRaw = rest[0];
     const files = rest.slice(1);
@@ -686,20 +807,24 @@
     session.history.push(trimmed);
     const segments = splitPipes(trimmed);
     let stdin = '';
+    let output = '';
     let clear = false;
+    let exitCode = 0;
     for (let i = 0; i < segments.length; i++) {
       const { argv, redirectFile, append } = parseSegment(segments[i]);
       const redirect = redirectFile ? { file: redirectFile, append } : null;
       const result = runOne(session, argv, stdin, redirect);
       if (result.clear) clear = true;
-      stdin = result.stdout;
-      if (result.exit !== 0 && i < segments.length - 1) {
+      output = result.stdout;
+      exitCode = result.exit;
+      if (result.exit !== 0) {
         stdin = '';
         break;
       }
+      stdin = result.stdout;
     }
-    session.lastOutput = stdin;
-    return { stdout: stdin, exit: 0, clear };
+    session.lastOutput = output;
+    return { stdout: output, exit: exitCode, clear };
   }
 
   /* ---------- проверки ---------- */
@@ -734,6 +859,7 @@
     const lastSpace = trimmed.lastIndexOf(' ');
     const prefix = lastSpace === -1 ? trimmed : trimmed.slice(lastSpace + 1);
     const before = lastSpace === -1 ? '' : trimmed.slice(0, lastSpace + 1);
+    let parentRaw = '';
 
     if (lastSpace === -1) {
       const cmds = Object.keys(COMMANDS).filter(c => c.startsWith(prefix));
@@ -744,7 +870,7 @@
     let dirPath = session.cwd;
     let namePrefix = prefix;
     if (prefix.includes('/')) {
-      const parentRaw = prefix.slice(0, prefix.lastIndexOf('/') + 1);
+      parentRaw = prefix.slice(0, prefix.lastIndexOf('/') + 1);
       namePrefix = prefix.slice(prefix.lastIndexOf('/') + 1);
       dirPath = normalizePath(parentRaw, session.cwd);
     }
@@ -767,7 +893,9 @@
         cwd: normalizePath(setup.cwd || ENV.HOME, ENV.HOME),
         history: [],
         lastOutput: '',
-        env: Object.assign({}, ENV)
+        env: Object.assign({}, ENV),
+        shell: setup.shell || 'bash',
+        processes: defaultProcesses()
       };
     },
     exec: function (session, line) {
@@ -778,6 +906,9 @@
     },
     autocomplete: function (session, input) {
       return autocomplete(session, input);
+    },
+    getPrompt: function (session) {
+      return getPrompt(session);
     },
     normalizePath: normalizePath,
     getNode: getNode
