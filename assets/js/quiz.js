@@ -1,7 +1,9 @@
 /**
- * quiz.js — рендер одного блока квиза.
+ * quiz.js — рендер одного блока квиза в стиле терминала.
  */
 import { markQuiz, isQuizDone } from './progress.js';
+
+const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
 
 export function createQuiz(data, lessonId, quizId) {
   const wrapper = document.createElement('div');
@@ -29,6 +31,7 @@ export function createQuiz(data, lessonId, quizId) {
 
     const label = document.createElement('label');
     label.htmlFor = input.id;
+    label.dataset.letter = LETTERS[idx] || String(idx);
     label.textContent = opt;
 
     li.appendChild(input);
@@ -37,7 +40,6 @@ export function createQuiz(data, lessonId, quizId) {
 
     input.addEventListener('change', () => {
       selectedIndex = idx;
-      // сбросить предыдущие стили
       Array.from(list.children).forEach(child => child.classList.remove('correct', 'wrong'));
       if (idx === data.answer) {
         li.classList.add('correct');

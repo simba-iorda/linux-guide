@@ -20,38 +20,39 @@
   </script>
 </head>
 <body>
-  <header class="site-header">
-    <button id="menu-toggle" class="menu-toggle" aria-label="Открыть меню" aria-expanded="false">☰</button>
-    <h1 class="site-title">Linux за 2 месяца</h1>
-    <div class="header-actions">
-      <div id="theme-dots" class="theme-dots" aria-label="Выбор темы"></div>
-      <span class="progress-badge" id="progress-badge">0/40</span>
-      <button id="reset-progress" class="reset-btn" title="Сбросить прогресс">Сбросить</button>
-    </div>
-  </header>
-
-  <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <nav>
-        <ul class="sidebar-list" id="sidebar-list">
-          <li>Уроки загружаются…</li>
-        </ul>
-      </nav>
-    </aside>
-
-    <main class="content" id="main">
+  <!-- kitty-окно: весь сайт — терминал -->
+  <div class="kitty-window" id="kitty-window">
+    <main class="terminal-scroll" id="main">
       <div class="loader" id="global-loader">
-        <div class="loader-spinner"></div>
-        <p>Загружаем курс…</p>
+        <span class="loader-text">Загружаем курс…</span>
       </div>
     </main>
+
+    <!-- powerline-таббар снизу, как в kitty -->
+    <nav class="tab-bar" id="tab-bar" aria-label="Навигация по курсу">
+      <div class="tab-bar-inner" id="tab-bar-inner"></div>
+      <div class="tab-bar-tools">
+        <div id="theme-dots" class="theme-dots" aria-label="Выбор темы"></div>
+        <button id="reset-progress" class="tab-tool reset-tool" title="Сбросить прогресс">[reset]</button>
+        <button id="menu-toggle" class="tab-tool menu-tool" aria-label="Открыть меню" aria-expanded="false">[menu]</button>
+      </div>
+    </nav>
   </div>
 
+  <!-- мобильный сайдбар модулей -->
+  <aside class="sidebar" id="sidebar">
+    <nav>
+      <ul class="sidebar-list" id="sidebar-list">
+        <li>Уроки загружаются…</li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- онбординг в стиле login -->
   <div id="onboarding" class="onboarding" hidden>
-    <div class="onboarding-card">
-      <h2>Ты в песочнице</h2>
-      <p>Сломать ничего нельзя. Это терминал-имитатор: пробуй команды, ошибайся и учись. Курс рассчитан на 2 месяца по 30 минут в день.</p>
-      <button id="onboarding-action" class="onboarding-action">Погнали</button>
+    <div class="onboarding-terminal">
+      <pre class="onboarding-screen"></pre>
+      <button id="onboarding-action" class="onboarding-action" hidden>Погнали</button>
     </div>
   </div>
 
