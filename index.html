@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linux с нуля</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <button id="menu-toggle" class="menu-toggle" aria-label="Открыть меню" aria-expanded="false">☰</button>
+    <h1 class="site-title">Linux с нуля</h1>
+    <div class="header-actions">
+      <span class="progress-badge" id="progress-badge">0/12</span>
+      <button id="reset-progress" class="reset-btn" title="Сбросить прогресс">Сбросить</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <ul class="sidebar-list" id="sidebar-list">
+          <li>Уроки загружаются…</li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="content" id="main">
+      <div class="loader" id="global-loader">
+        <div class="loader-spinner"></div>
+        <p>Загружаем уроки…</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/vendor/marked.min.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
