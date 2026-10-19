@@ -1,5 +1,5 @@
 /**
- * theme.js — переключатель тем и сохранение в localStorage.
+ * theme.js — переключение тем и сохранение в localStorage.
  */
 const STORAGE_KEY = 'linux-tutorial-theme';
 
@@ -32,31 +32,13 @@ export function applyTheme(key) {
   } catch (e) {
     // ignore
   }
-  updateActiveDot(theme.key);
+  return theme;
 }
 
-function updateActiveDot(activeKey) {
-  const dots = document.querySelectorAll('.theme-dot');
-  dots.forEach(btn => {
-    const active = btn.dataset.theme === activeKey;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-pressed', String(active));
-  });
+export function isValidTheme(key) {
+  return THEMES.some(t => t.key === key);
 }
 
-export function renderThemeDots(container) {
-  if (!container) return;
-  container.innerHTML = '';
-  THEMES.forEach(theme => {
-    const btn = document.createElement('button');
-    btn.className = 'theme-dot';
-    btn.type = 'button';
-    btn.dataset.theme = theme.key;
-    btn.title = theme.label;
-    btn.setAttribute('aria-label', `Тема ${theme.label}`);
-    btn.setAttribute('aria-pressed', 'false');
-    btn.addEventListener('click', () => applyTheme(theme.key));
-    container.appendChild(btn);
-  });
-  updateActiveDot(getStoredTheme());
+export function listThemeLabels() {
+  return THEMES.map(t => `${t.key} — ${t.label}`);
 }

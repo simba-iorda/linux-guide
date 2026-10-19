@@ -2,6 +2,7 @@
  * progress.js — учёт прогресса в localStorage.
  */
 const KEY = 'linux-tutorial-progress';
+const LAST_KEY = 'linux-tutorial-last-lesson';
 
 let data = load();
 let changeCallback = null;
@@ -92,8 +93,21 @@ export function completedLessons(lessonIds) {
 export function resetProgress() {
   data = { quizzes: {}, terminals: {}, lessons: {} };
   save();
+  try { localStorage.removeItem(LAST_KEY); } catch (e) {}
 }
 
 export function onChange(cb) {
   changeCallback = cb;
+}
+
+export function setLastLessonIndex(idx) {
+  try { localStorage.setItem(LAST_KEY, String(idx)); } catch (e) {}
+}
+
+export function getLastLessonIndex() {
+  try {
+    const raw = localStorage.getItem(LAST_KEY);
+    if (raw) return parseInt(raw, 10);
+  } catch (e) {}
+  return null;
 }

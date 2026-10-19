@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="assets/vendor/fonts/fonts.css">
   <link rel="stylesheet" href="assets/style.css">
   <script>
-    /* Ранняя установка темы до рендера, чтобы не было вспышки. */
     (function () {
       try {
         const themes = ['mocha','macchiato','frappe','latte','dracula','nord','gruvbox','tokyonight'];
@@ -20,39 +19,31 @@
   </script>
 </head>
 <body>
-  <!-- kitty-окно: весь сайт — терминал -->
-  <div class="kitty-window" id="kitty-window">
-    <main class="terminal-scroll" id="main">
-      <div class="loader" id="global-loader">
-        <span class="loader-text">Загружаем курс…</span>
-      </div>
-    </main>
+  <div class="terminal" id="terminal">
+    <div class="scrollback" id="scrollback" aria-live="polite" aria-atomic="false"></div>
 
-    <!-- powerline-таббар снизу, как в kitty -->
-    <nav class="tab-bar" id="tab-bar" aria-label="Навигация по курсу">
-      <div class="tab-bar-inner" id="tab-bar-inner"></div>
-      <div class="tab-bar-tools">
-        <div id="theme-dots" class="theme-dots" aria-label="Выбор темы"></div>
-        <button id="reset-progress" class="tab-tool reset-tool" title="Сбросить прогресс">[reset]</button>
-        <button id="menu-toggle" class="tab-tool menu-tool" aria-label="Открыть меню" aria-expanded="false">[menu]</button>
-      </div>
-    </nav>
+    <form class="prompt-line" id="prompt-form" autocomplete="off">
+      <span class="prompt" id="prompt-display" aria-hidden="true">user@linux:~$ </span>
+      <span class="input-wrap">
+        <input
+          id="command-input"
+          class="command-input"
+          type="text"
+          spellcheck="false"
+          autocapitalize="off"
+          autocomplete="off"
+          aria-label="Команда"
+          autofocus
+        >
+        <span class="input-ghost" id="input-ghost" aria-hidden="true"></span>
+      </span>
+    </form>
   </div>
 
-  <!-- мобильный сайдбар модулей -->
-  <aside class="sidebar" id="sidebar">
-    <nav>
-      <ul class="sidebar-list" id="sidebar-list">
-        <li>Уроки загружаются…</li>
-      </ul>
-    </nav>
-  </aside>
-
-  <!-- онбординг в стиле login -->
   <div id="onboarding" class="onboarding" hidden>
     <div class="onboarding-terminal">
-      <pre class="onboarding-screen"></pre>
-      <button id="onboarding-action" class="onboarding-action" hidden>Погнали</button>
+      <pre class="onboarding-screen" id="onboarding-screen"></pre>
+      <button id="onboarding-action" class="onboarding-action" hidden type="button">Погнали</button>
     </div>
   </div>
 

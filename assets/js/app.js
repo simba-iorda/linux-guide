@@ -1,26 +1,55 @@
 /**
- * app.js — точка входа учебника «Linux за 2 месяца».
- * v3: весь сайт — терминал kitty. Навигация = powerline-таббар снизу.
+ * app.js — точка входа v4: один полноэкранный терминал.
  */
-import { renderLesson, renderCheatSheet } from './renderer.js';
-import { resetTerminalAutoFocus } from './terminal.js';
-import { onChange, completedLessons, resetProgress, isLessonDoneExported, setLessonTotal } from './progress.js';
-import { applyTheme, getStoredTheme, renderThemeDots } from './theme.js';
+import './simulator.js';
+import { createTerminalUI } from './terminal-ui.js';
+import { createLessonEngine } from './lesson-engine.js';
+import {
+  applyTheme, getStoredTheme, isValidTheme, listThemeLabels
+} from './theme.js';
+import {
+  onChange, resetProgress, isLessonDoneExported, setLastLessonIndex, getLastLessonIndex
+} from './progress.js';
 
-const main = document.getElementById('main');
-const tabBarInner = document.getElementById('tab-bar-inner');
-const sidebar = document.getElementById('sidebar');
-const sidebarList = document.getElementById('sidebar-list');
-const resetBtn = document.getElementById('reset-progress');
-const menuBtn = document.getElementById('menu-toggle');
-const loader = document.getElementById('global-loader');
+const Simulator = globalThis.TerminalSimulator;
+const ONBOARDED_KEY = 'linux-tutorial-onboarded';
+
+const terminal = document.getElementById('terminal');
 const onboarding = document.getElementById('onboarding');
-const onboardingScreen = onboarding?.querySelector('.onboarding-screen');
+const onboardingScreen = document.getElementById('onboarding-screen');
 const onboardingAction = document.getElementById('onboarding-action');
-const themeDots = document.getElementById('theme-dots');
 
 let manifest = { modules: [], lessons: [] };
-let currentId = null;
+let currentLessonIndex = null;
+let freeSession = Simulator.createSession({});
+let userShell = 'bash';
+let pendingReset = false;
+
+applyTheme(getStoredTheme());
+
+const ui = createTerminalUI({
+  onSubmit: handleCommand,
+  getAutocompleteSession: () => {
+    if (engine.currentState() === 'terminal') return engine.getCurrentSession();
+    return freeSession;
+  }
+});
+
+const engine = createLessonEngine({
+  ui,
+  getUserShell: () => userShell,
+  onDone: (lessonId) => {
+    // Урок завершён — ничего дополнительного, движок уже напечатал.
+  }
+});
+
+onChange(() => {
+  // Прогресс изменился извне — можно обновить что-то, если нужно.
+});
+
+function setTitle(title) {
+  document.title = (title ? title + ' — ' : '') + 'Linux за 2 месяца';
+}
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -28,139 +57,14 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function setTitle(title) {
-  document.title = (title ? title + ' — ' : '') + 'Linux за 2 месяца';
+function lessonNumberById(id) {
+  const idx = manifest.lessons.findIndex(l => l.id === id);
+  return idx >= 0 ? idx + 1 : null;
 }
 
-function showLoader() {
-  main.innerHTML = loader.innerHTML;
-}
-
-function showError(heading, text, actionsHtml) {
-  main.innerHTML = `<div class="error-box"><h2>${escapeHtml(heading)}</h2><p>${escapeHtml(text)}</p>${actionsHtml || ''}</div>`;
-}
-
-function moduleLessons(moduleNum) {
-  return manifest.lessons.filter(l => l.module === moduleNum);
-}
-
-function moduleProgress(moduleNum) {
-  const list = moduleLessons(moduleNum);
-  const done = list.filter(l => isLessonDoneExported(l.id)).length;
-  return { total: list.length, done };
-}
-
-/* ---------- powerline-таббар снизу ---------- */
-function buildTabBar() {
-  tabBarInner.innerHTML = '';
-
-  // Карта курса
-  const roadmapTab = makeTab('roadmap', '🗺 Карта', () => loadRoadmap());
-  tabBarInner.appendChild(roadmapTab);
-
-  // Модули как вкладки
-  manifest.modules.forEach(mod => {
-    const label = `M${mod.num}`;
-    const tab = makeTab(`module-${mod.num}`, label, () => toggleModuleTab(mod.num));
-    tab.title = `${mod.title}: ${mod.goal}`;
-    tabBarInner.appendChild(tab);
-  });
-
-  // Справочник
-  const cheatTab = makeTab('cheatsheet', '📑 Справочник', () => loadCheatSheet());
-  tabBarInner.appendChild(cheatTab);
-
-  // Общий прогресс
-  const progress = document.createElement('span');
-  progress.className = 'tab-progress';
-  progress.id = 'tab-progress';
-  tabBarInner.appendChild(progress);
-
-  buildSidebar();
-  updateMarks();
-}
-
-function makeTab(id, label, onClick) {
-  const btn = document.createElement('button');
-  btn.className = 'tab';
-  btn.dataset.id = id;
-  btn.textContent = label;
-  btn.type = 'button';
-  btn.addEventListener('click', () => {
-    onClick();
-    if (window.innerWidth < 768) sidebar.classList.remove('open');
-  });
-  return btn;
-}
-
-function toggleModuleTab(moduleNum) {
-  // На десктопе открываем первый непройденный урок модуля, иначе первый
-  const lessons = moduleLessons(moduleNum);
-  const next = lessons.find(l => !isLessonDoneExported(l.id)) || lessons[0];
-  if (next) loadLesson(next.id);
-}
-
-/* ---------- мобильный сайдбар ---------- */
-function buildSidebar() {
-  sidebarList.innerHTML = '';
-
-  const roadmapLi = document.createElement('li');
-  roadmapLi.innerHTML = `<a href="#/roadmap" data-id="roadmap"><span>🗺 Карта курса</span></a>`;
-  roadmapLi.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadRoadmap(); sidebar.classList.remove('open'); });
-  sidebarList.appendChild(roadmapLi);
-
-  const cheatLi = document.createElement('li');
-  cheatLi.innerHTML = `<a href="#cheatsheet" data-id="cheatsheet"><span>📑 Полный справочник</span></a>`;
-  cheatLi.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadCheatSheet(); sidebar.classList.remove('open'); });
-  sidebarList.appendChild(cheatLi);
-
-  manifest.modules.forEach(mod => {
-    const group = document.createElement('li');
-    group.className = 'module-group';
-    group.dataset.module = mod.num;
-
-    const summary = document.createElement('button');
-    summary.className = 'module-summary';
-    summary.type = 'button';
-    summary.innerHTML = `<span class="module-name">Модуль ${mod.num}. ${escapeHtml(mod.title)}</span><span class="module-progress" data-module-progress="${mod.num}">0/0</span>`;
-    summary.addEventListener('click', () => group.classList.toggle('collapsed'));
-    group.appendChild(summary);
-
-    const ul = document.createElement('ul');
-    ul.className = 'module-lessons';
-    moduleLessons(mod.num).forEach(item => {
-      const li = document.createElement('li');
-      li.dataset.id = item.id;
-      li.innerHTML = `<a href="#${item.id}" data-id="${item.id}"><span>${escapeHtml(item.title)}</span></a>`;
-      li.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadLesson(item.id); sidebar.classList.remove('open'); });
-      ul.appendChild(li);
-    });
-    group.appendChild(ul);
-    sidebarList.appendChild(group);
-  });
-}
-
-function updateMarks() {
-  manifest.lessons.forEach(item => {
-    const li = sidebarList.querySelector(`li[data-id="${item.id}"]`);
-    if (li) li.classList.toggle('done', isLessonDoneExported(item.id));
-
-    const moduleNum = item.module;
-    const tab = tabBarInner.querySelector(`.tab[data-id="module-${moduleNum}"]`);
-    if (tab) {
-      const { done, total } = moduleProgress(moduleNum);
-      tab.classList.toggle('done', done === total && total > 0);
-    }
-  });
-  manifest.modules.forEach(mod => {
-    const { done, total } = moduleProgress(mod.num);
-    const badge = sidebarList.querySelector(`[data-module-progress="${mod.num}"]`);
-    if (badge) badge.textContent = `${done}/${total}`;
-  });
-  const completed = completedLessons(manifest.lessons.map(m => m.id)).length;
-  const total = manifest.lessons.length || 40;
-  const progress = document.getElementById('tab-progress');
-  if (progress) progress.textContent = `[${bar(completed, total)}] ${completed}/${total}`;
+function lessonByNumber(num) {
+  const idx = (parseInt(num, 10) || 0) - 1;
+  return manifest.lessons[idx];
 }
 
 function bar(done, total) {
@@ -169,197 +73,249 @@ function bar(done, total) {
   return '#'.repeat(filled) + '-'.repeat(w - filled);
 }
 
-function addNextLink(lessonId) {
-  const idx = manifest.lessons.findIndex(m => m.id === lessonId);
-  const nav = document.createElement('nav');
-  nav.className = 'lesson-next';
-  if (idx >= 0 && idx < manifest.lessons.length - 1) {
-    const next = manifest.lessons[idx + 1];
-    nav.innerHTML = `<a href="#${next.id}" class="next-link">cd ${escapeHtml(next.id)}<span># Следующий урок: ${escapeHtml(next.title)}</span></a>`;
-    nav.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadLesson(next.id); });
-  } else {
-    nav.innerHTML = `<a href="#/roadmap" class="next-link">tree --progress /курс<span># Посмотреть прогресс</span></a>`;
-    nav.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadRoadmap(); });
-  }
-  main.appendChild(nav);
+function moduleLessons(moduleNum) {
+  return manifest.lessons.filter(l => l.module === moduleNum);
 }
 
-async function loadLesson(id) {
-  currentId = id;
-  setTitle('Загрузка…');
-  showLoader();
-  try {
-    const res = await fetch(`content/lessons/${id}.md`);
-    if (!res.ok) {
-      if (res.status === 404) {
-        throw new Error('Урок пока не готов — контент-дорожки работают над ним. Загляни в Карту курса и начни с доступного урока.');
-      }
-      throw new Error(`Ошибка загрузки: ${res.status}`);
-    }
-    const md = await res.text();
-    resetTerminalAutoFocus();
-    const { root } = renderLesson(md, id);
-    main.innerHTML = '';
-    main.appendChild(root);
-    addNextLink(id);
-    history.replaceState(null, '', '#' + id);
-    const item = manifest.lessons.find(m => m.id === id);
-    setTitle(item ? item.title : id);
-    updateActiveTab(id);
-    window.scrollTo(0, 0);
-  } catch (e) {
-    setTitle('Ошибка');
-    showError('Не удалось загрузить урок', e.message, `<p><a href="#/roadmap" class="roadmap-link">Перейти к карте курса</a></p>`);
-    main.querySelector('.roadmap-link')?.addEventListener('click', (e) => { e.preventDefault(); loadRoadmap(); });
-  }
+function print(text, className = 'output') {
+  ui.appendLine(text, className);
 }
 
-function updateActiveTab(id) {
-  const item = manifest.lessons.find(m => m.id === id);
-  const moduleNum = item ? item.module : null;
-
-  tabBarInner.querySelectorAll('.tab').forEach(btn => {
-    const bid = btn.dataset.id;
-    let active = false;
-    if (id === 'roadmap' && bid === 'roadmap') active = true;
-    else if (id === 'cheatsheet' && bid === 'cheatsheet') active = true;
-    else if (moduleNum && bid === `module-${moduleNum}`) active = true;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-current', active ? 'page' : 'false');
-  });
-
-  sidebarList.querySelectorAll('a').forEach(a => a.classList.toggle('active', a.dataset.id === id));
+function printLines(text, className = 'output') {
+  ui.appendLines(text, className);
 }
 
-/* ---------- roadmap как вывод tree ---------- */
-function renderRoadmap() {
-  currentId = 'roadmap';
-  setTitle('Карта курса');
-  main.innerHTML = '';
-
-  const root = document.createElement('article');
-  root.className = 'roadmap';
-
-  const h1 = document.createElement('h1');
-  root.appendChild(h1);
-
-  const subtitle = document.createElement('p');
-  subtitle.className = 'roadmap-subtitle';
-  subtitle.textContent = '2 месяца по 30 минут в день — 8 модулей, 40 уроков.';
-  root.appendChild(subtitle);
-
-  const totalDone = completedLessons(manifest.lessons.map(l => l.id)).length;
+function printCourseMap() {
+  const totalDone = manifest.lessons.filter(l => isLessonDoneExported(l.id)).length;
   const total = manifest.lessons.length || 40;
-
-  const totalBar = document.createElement('div');
-  totalBar.className = 'roadmap-total';
-  totalBar.innerHTML = `<span class="roadmap-total-bar">[${bar(totalDone, total)}] ${totalDone}/${total} уроков</span>`;
-  root.appendChild(totalBar);
-
-  const tree = document.createElement('pre');
-  tree.className = 'roadmap-tree';
-  tree.textContent = buildTreeText(totalDone, total);
-  root.appendChild(tree);
-
-  // Клики по урокам в дереве
-  tree.addEventListener('click', (e) => {
-    const a = e.target.closest('a[data-id]');
-    if (!a) return;
-    e.preventDefault();
-    loadLesson(a.dataset.id);
-  });
-
-  main.appendChild(root);
-  history.replaceState(null, '', '#/roadmap');
-  updateActiveTab('roadmap');
-  window.scrollTo(0, 0);
-}
-
-function buildTreeText(totalDone, total) {
-  const lines = [];
-  lines.push('/курс/');
-
+  print('/курс/');
   manifest.modules.forEach((mod, modIdx) => {
     const lessons = moduleLessons(mod.num);
-    const { done, total: modTotal } = moduleProgress(mod.num);
+    const done = lessons.filter(l => isLessonDoneExported(l.id)).length;
     const isLastModule = modIdx === manifest.modules.length - 1;
     const modPrefix = isLastModule ? '└── ' : '├── ';
     const childPrefix = isLastModule ? '    ' : '│   ';
-    const doneMark = done === modTotal && modTotal > 0 ? ' ✓' : '';
-    lines.push(`${modPrefix}M${mod.num}_${escapeTree(mod.title)}${doneMark}`);
-
+    const doneMark = done === lessons.length && lessons.length > 0 ? ' ✓' : '';
+    print(`${modPrefix}M${mod.num}_${mod.title.replace(/\s+/g, '_')}${doneMark}`);
     lessons.forEach((l, lIdx) => {
       const isLastLesson = lIdx === lessons.length - 1;
       const lessonPrefix = isLastLesson ? '└── ' : '├── ';
       const lessonDone = isLessonDoneExported(l.id) ? ' ✓' : '';
-      lines.push(`${childPrefix}${lessonPrefix}${l.id}${lessonDone}`);
+      print(`${childPrefix}${lessonPrefix}${l.id}${lessonDone}`);
     });
   });
-
-  lines.push('');
-  lines.push(`# Прогресс: [${bar(totalDone, total)}] ${totalDone}/${total}`);
-  return lines.join('\n');
+  print('');
+  print(`# Прогресс: [${bar(totalDone, total)}] ${totalDone}/${total}`);
 }
 
-function escapeTree(text) {
-  return text.replace(/\s+/g, '_');
+function printHelp() {
+  print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
+  print('');
+  print('Доступные команды:');
+  print('  помощь, help          — этот список');
+  print('  курс                  — карта курса с прогрессом');
+  print('  урок <номер>          — открыть урок (1–' + (manifest.lessons.length || 40) + ')');
+  print('  дальше                — следующий урок');
+  print('  назад                 — предыдущий урок');
+  print('  тема список           — список тем');
+  print('  тема <имя>            — сменить тему');
+  print('  shell bash|fish|zsh   — переключить оболочку');
+  print('  сброс                 — сбросить прогресс');
+  print('  clear, очистить       — очистить терминал');
 }
 
-function loadRoadmap() {
-  renderRoadmap();
+function applyShell(shell) {
+  if (!['bash', 'fish', 'zsh'].includes(shell)) {
+    print(`shell: неизвестный режим «${shell}». Доступны: bash, fish, zsh.`, 'error');
+    return;
+  }
+  userShell = shell;
+  freeSession.shell = shell;
+  engine.setTaskShell(shell);
+  if (engine.currentState() !== 'terminal') {
+    ui.setPrompt(shell, freeSession.cwd);
+  }
+  print(`Режим оболочки: ${shell}`);
 }
 
-async function loadCheatSheet() {
-  currentId = 'cheatsheet';
-  setTitle('Полный справочник');
-  showLoader();
+function applyThemeByName(name) {
+  if (name === 'список') {
+    print('Доступные темы:');
+    listThemeLabels().forEach(l => print('  ' + l));
+    return;
+  }
+  if (!isValidTheme(name)) {
+    print(`тема: неизвестная тема «${name}». Набери «тема список».`, 'error');
+    return;
+  }
+  const theme = applyTheme(name);
+  print(`Тема установлена: ${theme.label}`);
+}
+
+function runFreeShellCommand(raw) {
+  const line = raw.trim();
+  if (!line) return;
+  ui.appendCommandLine(line);
+  const result = Simulator.exec(freeSession, line);
+  if (result.clear) {
+    ui.clearScrollback();
+  } else if (result.stdout) {
+    if (result.exit !== 0 && /command not found/.test(String(result.stdout || ''))) {
+      print(`bash: ${line.split(/\s+/)[0]}: команда не найдена`, 'error');
+      print('набери помощь', 'comment');
+    } else {
+      printLines(result.stdout, 'output');
+    }
+  }
+  ui.setPrompt(freeSession.shell, freeSession.cwd);
+}
+
+async function loadLessonByIndex(idx) {
+  if (idx < 0 || idx >= manifest.lessons.length) {
+    print('Такого урока нет.', 'error');
+    return;
+  }
+  currentLessonIndex = idx;
+  setLastLessonIndex(idx);
+  const lesson = manifest.lessons[idx];
+  setTitle(lesson.title);
+
+  if (ui.appendLine) {
+    // разделитель между разными уроками/сессиями
+    const hasContent = terminal.querySelector('.scrollback').childElementCount > 0;
+    if (hasContent) print('────────────────────────────', 'comment');
+    ui.appendCommandLine(`cat уроки/${lesson.id}.md`);
+  }
+
   try {
-    const res = await fetch('content/cheatsheet.md');
+    const res = await fetch(`content/lessons/${lesson.id}.md`);
     if (!res.ok) {
-      if (res.status === 404) throw new Error('Справочник не найден (404).');
-      throw new Error(`Ошибка загрузки: ${res.status}`);
+      print(`урок ${idx + 1}: не удалось загрузить (${res.status})`, 'error');
+      return;
     }
     const md = await res.text();
-    const root = renderCheatSheet(md);
-    main.innerHTML = '';
-    main.appendChild(root);
-    history.replaceState(null, '', '#cheatsheet');
-    updateActiveTab('cheatsheet');
-    window.scrollTo(0, 0);
+    engine.start(lesson.id, md);
   } catch (e) {
-    setTitle('Ошибка');
-    showError('Не удалось загрузить справочник', e.message);
+    print(`урок ${idx + 1}: ${e.message}`, 'error');
   }
 }
 
-function countBlocks(md) {
-  const quiz = (md.match(/^```quiz\s*\n/gm) || []).length;
-  const terminal = (md.match(/^```terminal\s*\n/gm) || []).length;
-  return { quiz, terminal };
+function handleMeta(cmd) {
+  const parts = cmd.split(/\s+/);
+  const name = parts[0].toLowerCase();
+  const arg = parts[1] || '';
+  const rest = parts.slice(1).join(' ');
+
+  if (name === 'помощь' || name === 'help') {
+    printHelp();
+    return true;
+  }
+
+  if (name === 'курс') {
+    printCourseMap();
+    return true;
+  }
+
+  if (name === 'урок') {
+    if (!arg) {
+      print('набери: урок <номер>', 'error');
+    } else {
+      const lesson = lessonByNumber(arg);
+      if (lesson) loadLessonByIndex(manifest.lessons.indexOf(lesson));
+      else print(`урок ${escapeHtml(arg)}: такого урока нет.`, 'error');
+    }
+    return true;
+  }
+
+  if (name === 'дальше') {
+    const start = currentLessonIndex !== null ? currentLessonIndex + 1 : (getLastLessonIndex() || 0);
+    if (start >= manifest.lessons.length) {
+      print('Это был последний урок. Ты дошёл до конца курса!', 'success');
+    } else {
+      loadLessonByIndex(start);
+    }
+    return true;
+  }
+
+  if (name === 'назад') {
+    const start = currentLessonIndex !== null ? currentLessonIndex - 1 : (getLastLessonIndex() || 0) - 1;
+    if (start < 0) {
+      print('Это самое начало курса.', 'warn');
+    } else {
+      loadLessonByIndex(start);
+    }
+    return true;
+  }
+
+  if (name === 'тема') {
+    applyThemeByName(arg.toLowerCase());
+    return true;
+  }
+
+  if (name === 'shell') {
+    applyShell(arg.toLowerCase());
+    return true;
+  }
+
+  if (name === 'сброс') {
+    if (pendingReset) {
+      resetProgress();
+      currentLessonIndex = null;
+      engine.reset();
+      freeSession = Simulator.createSession({});
+      userShell = 'bash';
+      ui.clearScrollback();
+      ui.setPrompt('bash', '/home/user');
+      print('Прогресс сброшен. Набери помощь.', 'success');
+      pendingReset = false;
+    } else {
+      print('Точно? Набери сброс ещё раз.', 'warn');
+      pendingReset = true;
+    }
+    return true;
+  }
+
+  if (name === 'clear' || name === 'очистить') {
+    ui.clearScrollback();
+    return true;
+  }
+
+  return false;
 }
 
-async function preloadLessonTotals() {
-  await Promise.all(manifest.lessons.map(async (item) => {
-    try {
-      const res = await fetch(`content/lessons/${item.id}.md`);
-      if (!res.ok) return;
-      const md = await res.text();
-      const { quiz, terminal } = countBlocks(md);
-      setLessonTotal(item.id, quiz, terminal);
-    } catch (e) {}
-  }));
+function handleCommand(raw) {
+  pendingReset = false;
+  const trimmed = raw.trim();
+  if (!trimmed) return;
+
+  // Мета-команды работают всегда.
+  if (handleMeta(trimmed)) {
+    ui.focus();
+    return;
+  }
+
+  // Если урок активен и ожидает ввода, отдаём движку.
+  if (engine.isActive() && engine.currentState() !== 'idle') {
+    engine.handleInput(trimmed);
+    ui.focus();
+    return;
+  }
+
+  // Иначе — свободный shell.
+  runFreeShellCommand(trimmed);
+  ui.focus();
 }
 
-/* ---------- onboarding как login ---------- */
+/* ---------- onboarding ---------- */
 function maybeShowOnboarding() {
-  const flag = 'linux-tutorial-onboarded';
   try {
-    if (localStorage.getItem(flag)) return;
-  } catch (e) { return; }
-  if (!onboarding) return;
+    if (localStorage.getItem(ONBOARDED_KEY)) return false;
+  } catch (e) { return false; }
+  if (!onboarding) return false;
   onboarding.hidden = false;
   onboardingAction.hidden = true;
   runLoginSequence();
+  return true;
 }
 
 function runLoginSequence() {
@@ -376,7 +332,6 @@ function runLoginSequence() {
   ];
   let i = 0;
   onboardingScreen.textContent = '';
-
   function next() {
     if (i >= lines.length) {
       onboardingAction.hidden = false;
@@ -393,64 +348,50 @@ function runLoginSequence() {
 function hideOnboarding() {
   if (!onboarding) return;
   onboarding.hidden = true;
-  try {
-    localStorage.setItem('linux-tutorial-onboarded', '1');
-  } catch (e) {}
+  try { localStorage.setItem(ONBOARDED_KEY, '1'); } catch (e) {}
 }
 
+function printWelcomeBack() {
+  print('Welcome back to Linux Tutorial 2.0');
+  print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
+  const lastIdx = getLastLessonIndex();
+  if (lastIdx !== null && manifest.lessons[lastIdx]) {
+    const num = lastIdx + 1;
+    print(`Продолжаем урок ${num} — набери урок ${num} или дальше.`);
+  } else {
+    print('Набери помощь, чтобы увидеть команды, или урок 1, чтобы начать.');
+  }
+}
+
+/* ---------- инициализация ---------- */
 async function init() {
-  showLoader();
-  applyTheme(getStoredTheme());
-  renderThemeDots(themeDots);
+  ui.setPrompt('bash', '/home/user');
 
   try {
     const res = await fetch('content/lessons/manifest.json');
-    if (!res.ok) {
-      if (res.status === 404) throw new Error('Список уроков не найден (404). Убедись, что content/lessons/manifest.json на месте.');
-      throw new Error(`Ошибка загрузки: ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`manifest ${res.status}`);
     manifest = await res.json();
-    buildTabBar();
-    onChange(updateMarks);
-    await preloadLessonTotals();
-    updateMarks();
+    setTitle('');
 
-    const hash = location.hash.replace('#', '');
-    if (hash === '/roadmap' || hash === 'roadmap') {
-      loadRoadmap();
-    } else if (hash === 'cheatsheet') {
-      await loadCheatSheet();
-    } else if (manifest.lessons.find(m => m.id === hash)) {
-      await loadLesson(hash);
-    } else {
-      loadRoadmap();
+    if (!maybeShowOnboarding()) {
+      printWelcomeBack();
     }
-
-    maybeShowOnboarding();
   } catch (e) {
     setTitle('Ошибка');
-    showError('Не удалось загрузить учебник', e.message + ' Проверь, что сервер запущен (./start.sh или python3 -m http.server 8000).');
+    print('Не удалось загрузить учебник: ' + e.message, 'error');
+    print('Проверь, что сервер запущен (./start.sh или python3 -m http.server 8000).', 'error');
   }
+
+  ui.focus();
 }
-
-resetBtn.addEventListener('click', () => {
-  if (confirm('Сбросить весь прогресс?')) {
-    resetProgress();
-    updateMarks();
-    if (currentId === 'roadmap') loadRoadmap();
-  }
-});
-
-menuBtn.addEventListener('click', () => {
-  sidebar.classList.toggle('open');
-  menuBtn.setAttribute('aria-expanded', String(sidebar.classList.contains('open')));
-});
 
 if (onboardingAction) {
   onboardingAction.addEventListener('click', () => {
     hideOnboarding();
-    const first = manifest.lessons[0];
-    if (first) loadLesson(first.id);
+    print('Welcome to Linux Tutorial 2.0');
+    print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
+    print('Набери помощь, чтобы увидеть список команд.');
+    ui.focus();
   });
 }
 
