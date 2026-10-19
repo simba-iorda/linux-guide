@@ -133,6 +133,7 @@ function printHelp() {
   print('  тема <имя>            — сменить тему');
   print('  shell bash|fish|zsh   — переключить оболочку');
   print('  сброс                 — сбросить прогресс');
+  print('Контент курса — MIT · оригинал шпаргалки: github.com/justxor/Linux-', 'comment');
   print('  clear, очистить       — очистить терминал');
 }
 
