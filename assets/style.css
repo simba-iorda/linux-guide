@@ -160,6 +160,15 @@ body {
 .warn { color: var(--warn); }
 .link { color: var(--link); text-decoration: underline; text-decoration-color: var(--link); text-underline-offset: 2px; }
 
+.line code, .line kbd { color: var(--k-yellow); }
+.line strong, .line b { color: var(--k-rosewater); }
+.line em, .line i { color: var(--k-sky); font-style: normal; }
+
+.list-item {
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
 .quiz-question { color: var(--warn); font-weight: 700; }
 .quiz-option { color: var(--fg); }
 .quiz-option::before { content: '  '; }
@@ -195,8 +204,14 @@ body {
 }
 .details-body[hidden] { display: none; }
 .details-body .line {
-  padding-left: 1ch;
   border-left: 2px solid var(--surface-1);
+}
+.details-body .line:not(.list-item) {
+  padding-left: 1ch;
+}
+.details-body .line.list-item {
+  padding-left: 2ch;
+  text-indent: -2ch;
 }
 
 /* ---------- строка ввода ---------- */

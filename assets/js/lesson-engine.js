@@ -19,6 +19,198 @@ function textContent(node) {
   return '';
 }
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function isInlineTag(tag) {
+  return ['code', 'strong', 'em', 'b', 'i', 'u', 's', 'a', 'span', 'small', 'sub', 'sup', 'mark', 'br', 'kbd'].includes(tag);
+}
+
+function buildInlineHtml(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const t = node.textContent;
+    // Collapse internal whitespace to a single space, but keep leading/trailing?
+    return escapeHtml(t.replace(/\s+/g, ' '));
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+  const tag = node.tagName.toLowerCase();
+  if (tag === 'br') return '<br>';
+  const inner = Array.from(node.childNodes).map(buildInlineHtml).join('');
+  if (tag === 'code' || tag === 'kbd') return `<code>${inner}</code>`;
+  if (tag === 'strong' || tag === 'b') return `<strong>${inner}</strong>`;
+  if (tag === 'em' || tag === 'i') return `<em>${inner}</em>`;
+  if (tag === 'a') {
+    const href = escapeHtml(node.getAttribute('href') || '');
+    return `<a href="${href}" class="link">${inner}</a>`;
+  }
+  return inner;
+}
+
+function endsWithSpace(s) {
+  return /\s$/.test(String(s));
+}
+
+function flushInlineBuffer(buffer, prefix, out, className = 'output') {
+  if (!buffer.length) return;
+  const html = buffer.join('').trim();
+  if (!html) return;
+  out.push({ className, html: escapeHtml(prefix) + html });
+}
+
+function InlineBuffer(prefix, out, className = 'output') {
+  this.buffer = [];
+  this.pendingSpace = false;
+  this.flush = function () {
+    flushInlineBuffer(this.buffer, prefix, out, className);
+    this.buffer = [];
+    this.pendingSpace = false;
+  };
+  this.addText = function (text) {
+    const trimmed = text.trim();
+    if (trimmed) {
+      const startsWithSpace = /^\s/.test(text);
+      if ((this.pendingSpace || startsWithSpace) && this.buffer.length && !endsWithSpace(this.buffer[this.buffer.length - 1])) {
+        this.buffer.push(' ');
+      }
+      this.buffer.push(escapeHtml(trimmed));
+      this.pendingSpace = /\s$/.test(text);
+    } else {
+      if (this.buffer.length && !endsWithSpace(this.buffer[this.buffer.length - 1])) {
+        this.pendingSpace = true;
+      }
+    }
+  };
+  this.addInline = function (html) {
+    if (this.pendingSpace && this.buffer.length && !endsWithSpace(this.buffer[this.buffer.length - 1])) {
+      this.buffer.push(' ');
+    }
+    this.buffer.push(html);
+    this.pendingSpace = false;
+  };
+}
+
+function processList(listEl, prefix, out) {
+  for (const li of listEl.children) {
+    if (li.tagName.toLowerCase() !== 'li') continue;
+    const liPrefix = prefix + '- ';
+    const buf = new InlineBuffer(liPrefix, out, 'output list-item');
+    const nestedLists = [];
+    for (const child of li.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        buf.addText(child.textContent);
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName.toLowerCase();
+        if (isInlineTag(tag)) {
+          buf.addInline(buildInlineHtml(child));
+        } else if (tag === 'p') {
+          for (const c of child.childNodes) {
+            if (c.nodeType === Node.TEXT_NODE) buf.addText(c.textContent);
+            else if (c.nodeType === Node.ELEMENT_NODE && isInlineTag(c.tagName.toLowerCase())) buf.addInline(buildInlineHtml(c));
+          }
+        } else if (tag === 'ul' || tag === 'ol') {
+          nestedLists.push(child);
+        }
+      }
+    }
+    buf.flush();
+    nestedLists.forEach(nl => processList(nl, prefix + '  ', out));
+  }
+}
+
+function processNode(node, prefix, out) {
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const selfTag = node.tagName.toLowerCase();
+
+    if (selfTag === 'table') {
+      const rows = [];
+      for (const row of node.querySelectorAll('tr')) {
+        const cells = Array.from(row.querySelectorAll('td, th')).map(c => textContent(c).trim());
+        if (cells.length) rows.push(cells);
+      }
+      if (rows.length) out.push({ type: 'table', rows });
+      return;
+    }
+
+    if (selfTag === 'ul' || selfTag === 'ol') {
+      processList(node, prefix, out);
+      return;
+    }
+
+    if (selfTag === 'pre') {
+      const code = node.querySelector('code');
+      const raw = code ? code.textContent : node.textContent;
+      const lines = raw.split('\n');
+      const endsNl = raw.endsWith('\n');
+      lines.forEach((l, i) => {
+        if (i === lines.length - 1 && l === '' && endsNl) return;
+        out.push({ className: 'code', text: prefix + l });
+      });
+      return;
+    }
+
+    if (selfTag === 'details') {
+      const summary = node.querySelector('summary');
+      const summaryText = summary ? textContent(summary).trim() : 'Подробнее';
+      const childLines = [];
+      for (const c of node.children) {
+        if (c === summary) continue;
+        processNode(c, '', childLines);
+      }
+      out.push({ type: 'details', summary: summaryText, lines: childLines });
+      return;
+    }
+
+    if (selfTag === 'hr') {
+      out.push({ className: 'comment', text: prefix + '---' });
+      return;
+    }
+
+    if (selfTag === 'h1' || selfTag === 'h2') {
+      out.push({ className: 'comment', text: prefix + '# ' + textContent(node).trim() });
+      return;
+    }
+
+    if (selfTag === 'h3' || selfTag === 'h4' || selfTag === 'h5' || selfTag === 'h6') {
+      out.push({ className: 'comment', text: prefix + '## ' + textContent(node).trim() });
+      return;
+    }
+  }
+
+  // Обычный контейнер (p, div, blockquote, td, li и т.п.): собираем инлайн
+  // и рекурсивно обходим блочных детей.
+  const buf = new InlineBuffer(prefix, out);
+  for (const child of node.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      buf.addText(child.textContent);
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+    const tag = child.tagName.toLowerCase();
+
+    if (isInlineTag(tag)) {
+      buf.addInline(buildInlineHtml(child));
+      continue;
+    }
+
+    buf.flush();
+    processNode(child, prefix, out);
+  }
+  buf.flush();
+}
+
+function htmlToLines(html) {
+  const out = [];
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  processNode(wrapper, '', out);
+  return out;
+}
+
 function wrapText(text, width) {
   if (width <= 0) return [String(text)];
   const words = String(text).split(/\s+/);
@@ -97,119 +289,6 @@ function renderTable(rows, maxWidth) {
     }
   });
   out.push({ className: 'table', text: bottom });
-  return out;
-}
-
-function htmlToLines(html) {
-  const out = [];
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = html;
-
-  function walk(node, prefix = '') {
-    for (const child of node.childNodes) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        const t = child.textContent.trim();
-        if (t) out.push({ className: 'output', text: prefix + t });
-        continue;
-      }
-      if (child.nodeType !== Node.ELEMENT_NODE) continue;
-      const tag = child.tagName.toLowerCase();
-      if (tag === 'h1' || tag === 'h2') {
-        out.push({ className: 'comment', text: prefix + '# ' + textContent(child).trim() });
-      } else if (tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
-        out.push({ className: 'comment', text: prefix + '## ' + textContent(child).trim() });
-      } else if (tag === 'p') {
-        const t = textContent(child).trim();
-        if (t) out.push({ className: 'output', text: prefix + t });
-      } else if (tag === 'pre') {
-        const code = child.querySelector('code');
-        const raw = code ? code.textContent : child.textContent;
-        const lines = raw.split('\n');
-        const endsNl = raw.endsWith('\n');
-        lines.forEach((l, i) => {
-          if (i === lines.length - 1 && l === '' && endsNl) return;
-          out.push({ className: 'code', text: prefix + l });
-        });
-      } else if (tag === 'ul' || tag === 'ol') {
-        for (const li of child.children) {
-          const t = textContent(li).trim();
-          if (t) out.push({ className: 'output', text: prefix + '- ' + t });
-        }
-      } else if (tag === 'blockquote') {
-        walk(child, prefix + '> ');
-      } else if (tag === 'table') {
-        const tableRows = [];
-        for (const row of child.querySelectorAll('tr')) {
-          const cells = Array.from(row.querySelectorAll('td, th')).map(c => textContent(c).trim());
-          if (cells.length) tableRows.push(cells);
-        }
-        if (tableRows.length) out.push({ type: 'table', rows: tableRows });
-      } else if (tag === 'hr') {
-        out.push({ className: 'comment', text: prefix + '---' });
-      } else if (tag === 'details') {
-        const summary = child.querySelector('summary');
-        const summaryText = summary ? textContent(summary).trim() : 'Подробнее';
-        const childLines = [];
-        for (const c of child.children) {
-          if (c === summary) continue;
-          const lenBefore = childLines.length;
-          walkElement(c, childLines, '');
-        }
-        out.push({ type: 'details', summary: summaryText, lines: childLines });
-      } else {
-        walk(child, prefix);
-      }
-    }
-  }
-
-  function walkElement(el, collector, prefix) {
-    for (const child of el.childNodes) {
-      if (child.nodeType === Node.TEXT_NODE) {
-        const t = child.textContent.trim();
-        if (t) collector.push({ className: 'output', text: prefix + t });
-        continue;
-      }
-      if (child.nodeType !== Node.ELEMENT_NODE) continue;
-      const tag = child.tagName.toLowerCase();
-      if (tag === 'h1' || tag === 'h2') {
-        collector.push({ className: 'comment', text: prefix + '# ' + textContent(child).trim() });
-      } else if (tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
-        collector.push({ className: 'comment', text: prefix + '## ' + textContent(child).trim() });
-      } else if (tag === 'p') {
-        const t = textContent(child).trim();
-        if (t) collector.push({ className: 'output', text: prefix + t });
-      } else if (tag === 'pre') {
-        const code = child.querySelector('code');
-        const raw = code ? code.textContent : child.textContent;
-        const lines = raw.split('\n');
-        const endsNl = raw.endsWith('\n');
-        lines.forEach((l, i) => {
-          if (i === lines.length - 1 && l === '' && endsNl) return;
-          collector.push({ className: 'code', text: prefix + l });
-        });
-      } else if (tag === 'ul' || tag === 'ol') {
-        for (const li of child.children) {
-          const t = textContent(li).trim();
-          if (t) collector.push({ className: 'output', text: prefix + '- ' + t });
-        }
-      } else if (tag === 'blockquote') {
-        walkElement(child, collector, prefix + '> ');
-      } else if (tag === 'table') {
-        const tableRows = [];
-        for (const row of child.querySelectorAll('tr')) {
-          const cells = Array.from(row.querySelectorAll('td, th')).map(c => textContent(c).trim());
-          if (cells.length) tableRows.push(cells);
-        }
-        if (tableRows.length) collector.push({ type: 'table', rows: tableRows });
-      } else if (tag === 'hr') {
-        collector.push({ className: 'comment', text: prefix + '---' });
-      } else {
-        walkElement(child, collector, prefix);
-      }
-    }
-  }
-
-  walk(wrapper);
   return out;
 }
 
@@ -308,7 +387,14 @@ function renderTextLines(lines, container, ui) {
       wrap.appendChild(body);
       container.appendChild(wrap);
     } else {
-      appendLineTo(container, line.text, line.className);
+      const el = document.createElement('div');
+      el.className = 'line ' + (line.className || 'output');
+      if (line.html != null) {
+        el.innerHTML = line.html;
+      } else {
+        el.textContent = line.text;
+      }
+      container.appendChild(el);
     }
   }
 }
@@ -359,7 +445,7 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     while (stepIndex < steps.length) {
       const step = steps[stepIndex];
       if (step.type === 'text') {
-        renderTextLines(step.lines, ui.getScrollback ? ui.getScrollback() : document.getElementById('scrollback'), ui);
+        renderTextLines(step.lines, ui.getScrollback(), ui);
         stepIndex++;
       } else if (step.type === 'terminal') {
         if (isTerminalDone(`${lessonId}-${step.id}`)) {
