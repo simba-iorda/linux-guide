@@ -97,7 +97,7 @@ http://localhost:8000
   отбирал решения, тестировал руками
 - E2E-проверки: Node-скрипт прогоняет решения всех 136 терминальных задач
   через реальный движок симулятора + smoke-тесты логики
-- Живой линк: https://sevastyaniordanov-cmd.github.io/linux-guide/
+- Живой линк: https://simba-iorda.github.io/linux-guide/
 
 ## Структура
 
