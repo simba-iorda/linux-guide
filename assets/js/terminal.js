@@ -1,6 +1,10 @@
 /**
  * terminal.js — рендер одного блока терминала.
- * v2: окно терминала, режимы bash/fish/zsh, ghost-автоподсказка в fish.
+ * v4: единое терминальное окно урока. Без рамки/светофора/заголовка.
+ *   - bash/fish/zsh — компактная строка внутри потока.
+ *   - Клик в любое место блока возвращает фокус инпуту.
+ *   - IntersectionObserver аккуратно подаёт фокус, когда задача попадает
+ *     во viewport, но не выхватывает его во время прокрутки пользователем.
  */
 import './simulator.js';
 import { markTerminal, isTerminalDone } from './progress.js';
@@ -19,6 +23,73 @@ const SHELLS = [
   { key: 'zsh', label: 'zsh' }
 ];
 
+/* ---------- фокус: защита от случайного захвата при скролле ---------- */
+let userScrolling = false;
+let scrollTimer = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('wheel', markUserScroll, { passive: true });
+  window.addEventListener('touchmove', markUserScroll, { passive: true });
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
+      markUserScroll();
+    }
+  }, { passive: true });
+}
+
+let autoFocusGiven = false;
+const pendingAutoFocus = [];
+
+function shouldAutoFocus() {
+  if (autoFocusGiven) return false;
+  if (userScrolling) return false;
+  const ae = document.activeElement;
+  if (ae && ae !== document.body && !ae.closest('.terminal-block')) {
+    // можно перебрать фокус, только если текущий элемент скрыт (например, кнопка онбординга)
+    if (ae.offsetParent !== null) return false;
+  }
+  if (typeof window !== 'undefined' && window.getSelection().toString()) return false;
+  return true;
+}
+
+function tryAutoFocus(input) {
+  if (!shouldAutoFocus()) return false;
+  input.focus();
+  autoFocusGiven = true;
+  return true;
+}
+
+function isInViewport(el) {
+  if (typeof window === 'undefined') return false;
+  const rect = el.getBoundingClientRect();
+  return rect.top < window.innerHeight && rect.bottom > 0;
+}
+
+function flushPendingFocus() {
+  if (autoFocusGiven || userScrolling) return;
+  const visible = pendingAutoFocus
+    .filter(item => document.body.contains(item.input) && isInViewport(item.input))
+    .sort((a, b) => a.input.getBoundingClientRect().top - b.input.getBoundingClientRect().top);
+  pendingAutoFocus.length = 0;
+  for (const item of visible) {
+    if (tryAutoFocus(item.input)) break;
+  }
+}
+
+function markUserScroll() {
+  userScrolling = true;
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => {
+    userScrolling = false;
+    flushPendingFocus();
+  }, 150);
+}
+
+export function resetTerminalAutoFocus() {
+  autoFocusGiven = false;
+  pendingAutoFocus.length = 0;
+}
+
 export function createTerminal(data, lessonId, taskId) {
   const shellMode = data.shell || 'bash';
 
@@ -26,26 +97,16 @@ export function createTerminal(data, lessonId, taskId) {
   wrapper.className = 'terminal-block';
   if (isTerminalDone(taskId)) wrapper.classList.add('terminal-passed');
 
-  /* Шапка окна */
-  const header = document.createElement('div');
-  header.className = 'terminal-header';
+  /* shell: bash | fish | zsh */
+  const metaLine = document.createElement('div');
+  metaLine.className = 'terminal-meta-line';
 
-  const lights = document.createElement('div');
-  lights.className = 'terminal-lights';
-  ['red', 'yellow', 'green'].forEach(c => {
-    const span = document.createElement('span');
-    span.className = `terminal-light terminal-light-${c}`;
-    lights.appendChild(span);
-  });
+  const shellLabel = document.createElement('span');
+  shellLabel.className = 'terminal-meta-label';
+  shellLabel.textContent = '# shell: ';
+  metaLine.appendChild(shellLabel);
 
-  const titleWrap = document.createElement('div');
-  titleWrap.className = 'terminal-title-wrap';
-  const title = document.createElement('span');
-  title.className = 'terminal-title';
-  title.textContent = data.title || 'Терминал';
-  titleWrap.appendChild(title);
-
-  const tabs = document.createElement('div');
+  const tabs = document.createElement('span');
   tabs.className = 'terminal-shell-tabs';
   const tabButtons = {};
   SHELLS.forEach(s => {
@@ -59,11 +120,8 @@ export function createTerminal(data, lessonId, taskId) {
     tabButtons[s.key] = btn;
     tabs.appendChild(btn);
   });
-
-  header.appendChild(lights);
-  header.appendChild(titleWrap);
-  header.appendChild(tabs);
-  wrapper.appendChild(header);
+  metaLine.appendChild(tabs);
+  wrapper.appendChild(metaLine);
 
   if (data.task) {
     const task = document.createElement('div');
@@ -99,22 +157,22 @@ export function createTerminal(data, lessonId, taskId) {
   promptLine.appendChild(inputWrap);
   wrapper.appendChild(promptLine);
 
-  const buttons = document.createElement('div');
-  buttons.className = 'terminal-buttons';
+  const actions = document.createElement('div');
+  actions.className = 'terminal-actions';
 
   const hintBtn = document.createElement('button');
-  hintBtn.className = 'terminal-btn';
+  hintBtn.className = 'terminal-action-btn';
   hintBtn.type = 'button';
-  hintBtn.textContent = 'Подсказка';
+  hintBtn.textContent = '[F1] подсказка';
   const hintText = document.createElement('div');
   hintText.className = 'terminal-hint';
   hintText.hidden = true;
   hintText.textContent = data.hint || 'Попробуй выполнить команду из условия.';
 
   const solutionBtn = document.createElement('button');
-  solutionBtn.className = 'terminal-btn';
+  solutionBtn.className = 'terminal-action-btn';
   solutionBtn.type = 'button';
-  solutionBtn.textContent = 'Показать решение';
+  solutionBtn.textContent = '[F2] решение';
   const solutionText = document.createElement('div');
   solutionText.className = 'terminal-solution';
   solutionText.hidden = true;
@@ -122,9 +180,9 @@ export function createTerminal(data, lessonId, taskId) {
     solutionText.innerHTML = '<code>' + escapeHtml(data.solution.join('\n')) + '</code>';
   }
 
-  buttons.appendChild(hintBtn);
-  buttons.appendChild(solutionBtn);
-  wrapper.appendChild(buttons);
+  actions.appendChild(hintBtn);
+  actions.appendChild(solutionBtn);
+  wrapper.appendChild(actions);
   wrapper.appendChild(hintText);
   wrapper.appendChild(solutionText);
 
@@ -168,13 +226,6 @@ export function createTerminal(data, lessonId, taskId) {
     if (success.hidden === false) return;
     success.hidden = false;
     wrapper.classList.add('terminal-passed');
-    const status = header.querySelector('.terminal-status');
-    if (!status) {
-      const s = document.createElement('span');
-      s.className = 'terminal-status';
-      s.textContent = '✓ выполнено';
-      titleWrap.appendChild(s);
-    }
     markTerminal(lessonId, taskId);
   }
 
@@ -271,19 +322,46 @@ export function createTerminal(data, lessonId, taskId) {
 
   hintBtn.addEventListener('click', () => {
     hintText.hidden = !hintText.hidden;
-    hintBtn.textContent = hintText.hidden ? 'Подсказка' : 'Скрыть подсказку';
+    hintBtn.textContent = hintText.hidden ? '[F1] подсказка' : '[F1] скрыть подсказку';
   });
 
   solutionBtn.addEventListener('click', () => {
     solutionText.hidden = !solutionText.hidden;
-    solutionBtn.textContent = solutionText.hidden ? 'Показать решение' : 'Скрыть решение';
+    solutionBtn.textContent = solutionText.hidden ? '[F2] решение' : '[F2] скрыть решение';
   });
+
+  /* Клик по блоку возвращает фокус инпуту, но не мешает кнопкам/ссылкам/выделению. */
+  function focusInput(e) {
+    if (e && e.target.closest('button, a, input, textarea, select')) return;
+    if (typeof window !== 'undefined' && window.getSelection().toString()) return;
+    input.focus();
+  }
+  wrapper.addEventListener('click', focusInput);
+  output.addEventListener('click', focusInput);
 
   if (isTerminalDone(taskId)) {
     showSuccess();
     solutionText.hidden = false;
   }
 
-  input.focus();
+  /* Автофокус при появлении во viewport — осторожно, без гонок со скроллом. */
+  if (typeof IntersectionObserver !== 'undefined') {
+    const focusItem = { input, wrapper };
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        if (userScrolling) {
+          // откладываем фокус до окончания прокрутки пользователя
+          if (!pendingAutoFocus.includes(focusItem)) pendingAutoFocus.push(focusItem);
+        } else if (tryAutoFocus(input)) {
+          io.unobserve(wrapper);
+        } else {
+          if (!pendingAutoFocus.includes(focusItem)) pendingAutoFocus.push(focusItem);
+        }
+      });
+    }, { threshold: 0.4 });
+    io.observe(wrapper);
+  }
+
   return wrapper;
 }

@@ -3,6 +3,7 @@
  * v3: весь сайт — терминал kitty. Навигация = powerline-таббар снизу.
  */
 import { renderLesson, renderCheatSheet } from './renderer.js';
+import { resetTerminalAutoFocus } from './terminal.js';
 import { onChange, completedLessons, resetProgress, isLessonDoneExported, setLessonTotal } from './progress.js';
 import { applyTheme, getStoredTheme, renderThemeDots } from './theme.js';
 
@@ -196,6 +197,7 @@ async function loadLesson(id) {
       throw new Error(`Ошибка загрузки: ${res.status}`);
     }
     const md = await res.text();
+    resetTerminalAutoFocus();
     const { root } = renderLesson(md, id);
     main.innerHTML = '';
     main.appendChild(root);
