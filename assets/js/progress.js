@@ -96,6 +96,24 @@ export function resetProgress() {
   try { localStorage.removeItem(LAST_KEY); } catch (e) {}
 }
 
+export function setCurrentLesson(idx) {
+  data.currentLesson = idx;
+  save();
+}
+
+export function getCurrentLesson() {
+  return typeof data.currentLesson === 'number' ? data.currentLesson : null;
+}
+
+export function setScrollPosition(y) {
+  data.scrollPosition = typeof y === 'number' ? y : 0;
+  save();
+}
+
+export function getScrollPosition() {
+  return typeof data.scrollPosition === 'number' ? data.scrollPosition : null;
+}
+
 export function onChange(cb) {
   changeCallback = cb;
 }

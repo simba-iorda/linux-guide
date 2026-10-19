@@ -167,13 +167,47 @@ body {
 .hint { color: var(--muted); padding-left: 2ch; border-left: 2px solid var(--surface-1); }
 .solution { color: var(--muted); padding-left: 2ch; border-left: 2px solid var(--surface-1); }
 
+/* ---------- таблицы в терминальном стиле ---------- */
+.line.table {
+  color: var(--fg);
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}
+.line.table-header {
+  color: var(--accent);
+  font-weight: 700;
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}
+
+/* ---------- details / «Для любопытных» ---------- */
+.details-block { margin: 0.4rem 0; }
+.details-summary {
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.details-summary:hover,
+.details-summary:focus {
+  color: var(--link);
+}
+.details-body[hidden] { display: none; }
+.details-body .line {
+  padding-left: 1ch;
+  border-left: 2px solid var(--surface-1);
+}
+
 /* ---------- строка ввода ---------- */
 .prompt-line {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
   flex-shrink: 0;
   padding: var(--pad);
   border-top: 1px solid var(--surface-1);
+  min-height: calc(1.6em + 2 * var(--pad));
 }
 
 .prompt {
@@ -181,15 +215,17 @@ body {
   font-weight: 700;
   white-space: pre;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .input-wrap {
   flex: 1;
-  position: relative;
   display: inline-flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
   min-width: 1ch;
   margin-left: 0.5ch;
+  min-width: 1ch;
 }
 
 .command-input {
@@ -206,13 +242,13 @@ body {
 }
 
 .input-ghost {
-  position: absolute;
-  left: 0;
-  top: 0;
   color: var(--muted);
   opacity: 0.5;
   pointer-events: none;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 
 /* ---------- onboarding как login ---------- */

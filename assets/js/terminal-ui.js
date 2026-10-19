@@ -36,6 +36,8 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   let userScrolling = false;
   let scrollTimer = null;
   let enabled = true;
+  let autoScroll = true;
+  let onScrollCallback = null;
 
   function setPrompt(newShell, newCwd) {
     shell = newShell || shell;
@@ -67,8 +69,12 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   }
 
   function maybeScroll() {
-    if (userScrolling) return;
+    if (userScrolling || !autoScroll) return;
     scrollback.scrollTop = scrollback.scrollHeight;
+  }
+
+  function setAutoScroll(value) {
+    autoScroll = value;
   }
 
   function markUserScroll() {
@@ -91,7 +97,7 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   function updateGhost() {
     ghostText = '';
     ghost.textContent = '';
-    input.style.width = Math.max(1, input.value.length + 1) + 'ch';
+    input.style.width = Math.max(1, input.value.length) + 'ch';
     if (shell !== 'fish') return;
     const val = input.value;
     if (!val) return;
@@ -204,6 +210,55 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   function appendSuccess(text) { appendLine(text, 'success'); }
   function appendError(text) { appendLine(text, 'error'); }
 
+  function appendRaw(node) {
+    scrollback.appendChild(node);
+    maybeScroll();
+  }
+
+  function appendAnchor() {
+    const el = document.createElement('div');
+    el.className = 'lesson-anchor';
+    el.style.height = '0';
+    scrollback.appendChild(el);
+    return el;
+  }
+
+  function scrollToElement(el) {
+    if (!el || !scrollback.contains(el)) return;
+    scrollback.scrollTop = el.offsetTop - scrollback.offsetTop;
+  }
+
+  function getScrollTop() { return scrollback.scrollTop; }
+  function setScrollTop(y) { scrollback.scrollTop = y; }
+  function getScrollHeight() { return scrollback.scrollHeight; }
+  function getClientHeight() { return scrollback.clientHeight; }
+
+  function getTableMaxWidth() {
+    if (!scrollback) return 100;
+    const style = window.getComputedStyle(scrollback);
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
+    const width = scrollback.clientWidth - padLeft - padRight;
+    const test = document.createElement('span');
+    test.textContent = 'M';
+    test.style.position = 'absolute';
+    test.style.visibility = 'hidden';
+    test.style.whiteSpace = 'pre';
+    test.style.font = style.font;
+    document.body.appendChild(test);
+    const charWidth = test.getBoundingClientRect().width || 9;
+    document.body.removeChild(test);
+    return Math.max(40, Math.floor(width / charWidth));
+  }
+
+  function onScroll(cb) {
+    onScrollCallback = cb;
+  }
+
+  scrollback.addEventListener('scroll', () => {
+    if (onScrollCallback) onScrollCallback(scrollback.scrollTop);
+  }, { passive: true });
+
   return {
     setPrompt,
     appendLine,
@@ -212,6 +267,17 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     appendComment,
     appendSuccess,
     appendError,
+    appendRaw,
+    appendAnchor,
+    scrollToElement,
+    getScrollTop,
+    setScrollTop,
+    getScrollHeight,
+    getClientHeight,
+    getTableMaxWidth,
+    getScrollback: () => scrollback,
+    setAutoScroll,
+    onScroll,
     clearScrollback,
     focus,
     setEnabled,

@@ -19,6 +19,87 @@ function textContent(node) {
   return '';
 }
 
+function wrapText(text, width) {
+  if (width <= 0) return [String(text)];
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let cur = '';
+  for (const word of words) {
+    if (!word) continue;
+    if (word.length > width) {
+      if (cur) { lines.push(cur); cur = ''; }
+      for (let i = 0; i < word.length; i += width) {
+        lines.push(word.slice(i, i + width));
+      }
+      continue;
+    }
+    const sep = cur ? ' ' : '';
+    if (cur.length + sep.length + word.length <= width) {
+      cur += sep + word;
+    } else {
+      lines.push(cur);
+      cur = word;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+function renderTable(rows, maxWidth) {
+  const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  if (!colCount) return [];
+  const paddedRows = rows.map(r => {
+    const arr = r.slice();
+    while (arr.length < colCount) arr.push('');
+    return arr;
+  });
+
+  const widths = Array(colCount).fill(0);
+  paddedRows.forEach(r => {
+    r.forEach((cell, i) => {
+      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, l.length), 0);
+      widths[i] = Math.max(widths[i], maxLine);
+    });
+  });
+
+  const minWidth = 3;
+  const totalNatural = widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
+  if (totalNatural > maxWidth) {
+    let excess = totalNatural - maxWidth;
+    while (excess > 0) {
+      const widest = widths
+        .map((w, i) => ({ w, i }))
+        .filter(x => x.w > minWidth)
+        .sort((a, b) => b.w - a.w)[0];
+      if (!widest) break;
+      widths[widest.i]--;
+      excess--;
+    }
+  }
+
+  const wrappedRows = paddedRows.map(r => r.map((cell, i) => wrapText(String(cell), widths[i])));
+  const out = [];
+  const top = '┌' + widths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+  const sep = '├' + widths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+  const bottom = '└' + widths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
+  out.push({ className: 'table', text: top });
+  paddedRows.forEach((r, rowIdx) => {
+    const cellLines = wrappedRows[rowIdx];
+    const height = cellLines.reduce((m, lines) => Math.max(m, lines.length), 0);
+    const isHeader = rowIdx === 0;
+    for (let l = 0; l < height; l++) {
+      const lineText = '│ ' + cellLines.map((lines, i) => (lines[l] || '').padEnd(widths[i])).join(' │ ') + ' │';
+      out.push({ className: isHeader ? 'table-header' : 'table', text: lineText });
+    }
+    if (rowIdx === 0 && paddedRows.length > 1) {
+      out.push({ className: 'table', text: sep });
+    }
+  });
+  out.push({ className: 'table', text: bottom });
+  return out;
+}
+
 function htmlToLines(html) {
   const out = [];
   const wrapper = document.createElement('div');
@@ -57,23 +138,73 @@ function htmlToLines(html) {
       } else if (tag === 'blockquote') {
         walk(child, prefix + '> ');
       } else if (tag === 'table') {
+        const tableRows = [];
         for (const row of child.querySelectorAll('tr')) {
           const cells = Array.from(row.querySelectorAll('td, th')).map(c => textContent(c).trim());
-          if (cells.length) out.push({ className: 'output', text: prefix + '| ' + cells.join(' | ') + ' |' });
+          if (cells.length) tableRows.push(cells);
         }
+        if (tableRows.length) out.push({ type: 'table', rows: tableRows });
       } else if (tag === 'hr') {
         out.push({ className: 'comment', text: prefix + '---' });
       } else if (tag === 'details') {
         const summary = child.querySelector('summary');
-        if (summary) {
-          out.push({ className: 'comment', text: prefix + '# ' + textContent(summary).trim() });
-        }
+        const summaryText = summary ? textContent(summary).trim() : 'Подробнее';
+        const childLines = [];
         for (const c of child.children) {
           if (c === summary) continue;
-          walk(c, prefix + '# ');
+          const lenBefore = childLines.length;
+          walkElement(c, childLines, '');
         }
+        out.push({ type: 'details', summary: summaryText, lines: childLines });
       } else {
         walk(child, prefix);
+      }
+    }
+  }
+
+  function walkElement(el, collector, prefix) {
+    for (const child of el.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const t = child.textContent.trim();
+        if (t) collector.push({ className: 'output', text: prefix + t });
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'h1' || tag === 'h2') {
+        collector.push({ className: 'comment', text: prefix + '# ' + textContent(child).trim() });
+      } else if (tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
+        collector.push({ className: 'comment', text: prefix + '## ' + textContent(child).trim() });
+      } else if (tag === 'p') {
+        const t = textContent(child).trim();
+        if (t) collector.push({ className: 'output', text: prefix + t });
+      } else if (tag === 'pre') {
+        const code = child.querySelector('code');
+        const raw = code ? code.textContent : child.textContent;
+        const lines = raw.split('\n');
+        const endsNl = raw.endsWith('\n');
+        lines.forEach((l, i) => {
+          if (i === lines.length - 1 && l === '' && endsNl) return;
+          collector.push({ className: 'code', text: prefix + l });
+        });
+      } else if (tag === 'ul' || tag === 'ol') {
+        for (const li of child.children) {
+          const t = textContent(li).trim();
+          if (t) collector.push({ className: 'output', text: prefix + '- ' + t });
+        }
+      } else if (tag === 'blockquote') {
+        walkElement(child, collector, prefix + '> ');
+      } else if (tag === 'table') {
+        const tableRows = [];
+        for (const row of child.querySelectorAll('tr')) {
+          const cells = Array.from(row.querySelectorAll('td, th')).map(c => textContent(c).trim());
+          if (cells.length) tableRows.push(cells);
+        }
+        if (tableRows.length) collector.push({ type: 'table', rows: tableRows });
+      } else if (tag === 'hr') {
+        collector.push({ className: 'comment', text: prefix + '---' });
+      } else {
+        walkElement(child, collector, prefix);
       }
     }
   }
@@ -139,6 +270,49 @@ export function parseLesson(md) {
   return { steps, quizCount: quizIndex, terminalCount: terminalIndex };
 }
 
+function appendLineTo(container, text, className) {
+  const el = document.createElement('div');
+  el.className = 'line ' + (className || 'output');
+  el.textContent = text;
+  container.appendChild(el);
+}
+
+function renderTextLines(lines, container, ui) {
+  for (const line of lines) {
+    if (line && line.type === 'table') {
+      const tableLines = renderTable(line.rows, ui.getTableMaxWidth());
+      tableLines.forEach(tl => appendLineTo(container, tl.text, tl.className));
+    } else if (line && line.type === 'details') {
+      const wrap = document.createElement('div');
+      wrap.className = 'details-block';
+      const summary = document.createElement('div');
+      summary.className = 'line comment details-summary';
+      summary.textContent = '▼ ' + line.summary;
+      summary.tabIndex = 0;
+      const body = document.createElement('div');
+      body.className = 'details-body';
+      body.hidden = true;
+      renderTextLines(line.lines, body, ui);
+      const toggle = () => {
+        body.hidden = !body.hidden;
+        summary.textContent = (body.hidden ? '▼ ' : '▲ ') + line.summary;
+      };
+      summary.addEventListener('click', toggle);
+      summary.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
+        }
+      });
+      wrap.appendChild(summary);
+      wrap.appendChild(body);
+      container.appendChild(wrap);
+    } else {
+      appendLineTo(container, line.text, line.className);
+    }
+  }
+}
+
 export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell }) {
   let lessonId = null;
   let steps = [];
@@ -178,7 +352,6 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     const parsed = parseLesson(md);
     steps = parsed.steps;
     setLessonTotal(lessonId, parsed.quizCount, parsed.terminalCount);
-    // Mark already completed interactive steps in progress so engine skips them.
     advance();
   }
 
@@ -186,9 +359,7 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     while (stepIndex < steps.length) {
       const step = steps[stepIndex];
       if (step.type === 'text') {
-        for (const line of step.lines) {
-          ui.appendLine(line.text, line.className);
-        }
+        renderTextLines(step.lines, ui.getScrollback ? ui.getScrollback() : document.getElementById('scrollback'), ui);
         stepIndex++;
       } else if (step.type === 'terminal') {
         if (isTerminalDone(`${lessonId}-${step.id}`)) {
@@ -221,7 +392,6 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
         return;
       }
     }
-    // Все шаги пройдены.
     finishLesson();
   }
 

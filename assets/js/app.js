@@ -8,7 +8,9 @@ import {
   applyTheme, getStoredTheme, isValidTheme, listThemeLabels
 } from './theme.js';
 import {
-  onChange, resetProgress, isLessonDoneExported, setLastLessonIndex, getLastLessonIndex
+  onChange, resetProgress, isLessonDoneExported,
+  setLastLessonIndex, getLastLessonIndex,
+  setCurrentLesson, getCurrentLesson, setScrollPosition, getScrollPosition
 } from './progress.js';
 
 const Simulator = globalThis.TerminalSimulator;
@@ -45,6 +47,16 @@ const engine = createLessonEngine({
 
 onChange(() => {
   // Прогресс изменился извне — можно обновить что-то, если нужно.
+});
+
+// Сохраняем позицию прокрутки с небольшим дебаунсом.
+let scrollSaveTimer = null;
+ui.onScroll((y) => {
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(() => setScrollPosition(y), 200);
+});
+window.addEventListener('beforeunload', () => {
+  setScrollPosition(ui.getScrollTop());
 });
 
 function setTitle(title) {
@@ -177,26 +189,33 @@ async function loadLessonByIndex(idx) {
   }
   currentLessonIndex = idx;
   setLastLessonIndex(idx);
+  setCurrentLesson(idx);
   const lesson = manifest.lessons[idx];
   setTitle(lesson.title);
 
   if (ui.appendLine) {
-    // разделитель между разными уроками/сессиями
-    const hasContent = terminal.querySelector('.scrollback').childElementCount > 0;
+    // Новый урок всегда начинается сверху экрана.
+    ui.setAutoScroll(false);
+    const anchor = ui.appendAnchor();
+    const hasContent = terminal.querySelector('.scrollback').childElementCount > 1;
     if (hasContent) print('────────────────────────────', 'comment');
     ui.appendCommandLine(`cat уроки/${lesson.id}.md`);
-  }
 
-  try {
-    const res = await fetch(`content/lessons/${lesson.id}.md`);
-    if (!res.ok) {
-      print(`урок ${idx + 1}: не удалось загрузить (${res.status})`, 'error');
-      return;
+    try {
+      const res = await fetch(`content/lessons/${lesson.id}.md`);
+      if (!res.ok) {
+        print(`урок ${idx + 1}: не удалось загрузить (${res.status})`, 'error');
+        ui.setAutoScroll(true);
+        return;
+      }
+      const md = await res.text();
+      engine.start(lesson.id, md);
+      ui.scrollToElement(anchor);
+      ui.setAutoScroll(true);
+    } catch (e) {
+      print(`урок ${idx + 1}: ${e.message}`, 'error');
+      ui.setAutoScroll(true);
     }
-    const md = await res.text();
-    engine.start(lesson.id, md);
-  } catch (e) {
-    print(`урок ${idx + 1}: ${e.message}`, 'error');
   }
 }
 
@@ -375,6 +394,15 @@ async function init() {
 
     if (!maybeShowOnboarding()) {
       printWelcomeBack();
+      const savedLesson = getCurrentLesson();
+      if (savedLesson !== null && manifest.lessons[savedLesson]) {
+        await loadLessonByIndex(savedLesson);
+        const savedY = getScrollPosition();
+        if (savedY !== null) {
+          const maxY = ui.getScrollHeight() - ui.getClientHeight();
+          ui.setScrollTop(Math.max(0, Math.min(savedY, maxY)));
+        }
+      }
     }
   } catch (e) {
     setTitle('Ошибка');
