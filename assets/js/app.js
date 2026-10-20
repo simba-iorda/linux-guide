@@ -59,6 +59,54 @@ window.addEventListener('beforeunload', () => {
   setScrollPosition(ui.getScrollTop());
 });
 
+/* ---------- алиасы курсовых команд ---------- */
+const COMMAND_ALIASES = {
+  help: 'помощь',
+  хелп: 'помощь',
+  next: 'дальше',
+  back: 'назад',
+  map: 'курс',
+  course: 'курс',
+  lesson: 'урок',
+  theme: 'тема',
+  reset: 'сброс',
+  hint: 'подсказка',
+  solution: 'решение',
+  clear: 'clear',
+  очистить: 'очистить',
+  shell: 'shell'
+};
+
+// Глобальные команды, которые не должны «съедать» активную задачу/квиз.
+const GLOBAL_COMMANDS = new Set([
+  'помощь', 'курс', 'урок', 'дальше', 'назад',
+  'тема', 'shell', 'сброс', 'clear', 'очистить'
+]);
+
+// Команды, которые есть и в симуляторе (некоторые глобальные, например help/clear,
+// должны при необходимости выполняться и как шаг задачи).
+const SIMULATOR_COMMANDS = new Set([
+  'pwd', 'whoami', 'date', 'clear', 'help', 'history', 'uname', 'df', 'free',
+  'ps', 'kill', 'ping', 'curl', 'man', 'ls', 'tree', 'cd', 'cat', 'head', 'tail',
+  'touch', 'mkdir', 'cp', 'mv', 'rm', 'echo', 'grep', 'wc'
+]);
+
+function normalizeCommandWord(word) {
+  return COMMAND_ALIASES[word.toLowerCase()] || word.toLowerCase();
+}
+
+function getCommandName(cmd) {
+  return normalizeCommandWord(cmd.split(/\s+/)[0]);
+}
+
+function isCourseGlobalCommand(cmd) {
+  return GLOBAL_COMMANDS.has(getCommandName(cmd));
+}
+
+function isSimulatorCommand(cmd) {
+  return SIMULATOR_COMMANDS.has(cmd.split(/\s+/)[0].toLowerCase());
+}
+
 function setTitle(title) {
   document.title = (title ? title + ' — ' : '') + 'Linux за 2 месяца';
 }
@@ -124,17 +172,19 @@ function printHelp() {
   print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
   print('');
   print('Доступные команды:');
-  print('  помощь, help          — этот список');
-  print('  курс                  — карта курса с прогрессом');
-  print('  урок <номер>          — открыть урок (1–' + (manifest.lessons.length || 40) + ')');
-  print('  дальше                — следующий урок');
-  print('  назад                 — предыдущий урок');
-  print('  тема список           — список тем');
-  print('  тема <имя>            — сменить тему');
-  print('  shell bash|fish|zsh   — переключить оболочку');
-  print('  сброс                 — сбросить прогресс');
+  print('  помощь / help, хелп       — этот список');
+  print('  курс / map, course        — карта курса с прогрессом');
+  print('  урок / lesson <номер>     — открыть урок (1–' + (manifest.lessons.length || 40) + ')');
+  print('  дальше / next             — следующий урок');
+  print('  назад / back              — предыдущий урок');
+  print('  тема / theme список       — список тем');
+  print('  тема / theme <имя>        — сменить тему');
+  print('  shell bash|fish|zsh       — переключить оболочку');
+  print('  сброс / reset             — сбросить прогресс');
+  print('  clear, очистить           — очистить терминал');
+  print('  подсказка / hint          — подсказка к активной задаче');
+  print('  решение / solution        — показать решение активной задачи');
   print('Контент курса — MIT · оригинал шпаргалки: github.com/justxor/Linux-', 'comment');
-  print('  clear, очистить       — очистить терминал');
 }
 
 function applyShell(shell) {
@@ -220,13 +270,20 @@ async function loadLessonByIndex(idx) {
   }
 }
 
+function restoreTaskPrompt() {
+  if (engine.currentState() === 'terminal') {
+    const session = engine.getCurrentSession();
+    if (session) ui.setPrompt(session.shell, session.cwd);
+  }
+}
+
 function handleMeta(cmd) {
   const parts = cmd.split(/\s+/);
-  const name = parts[0].toLowerCase();
+  const name = getCommandName(cmd);
   const arg = parts[1] || '';
   const rest = parts.slice(1).join(' ');
 
-  if (name === 'помощь' || name === 'help') {
+  if (name === 'помощь') {
     printHelp();
     return true;
   }
@@ -308,20 +365,37 @@ function handleCommand(raw) {
   const trimmed = raw.trim();
   if (!trimmed) return;
 
-  // Мета-команды работают всегда.
-  if (handleMeta(trimmed)) {
+  const activeLesson = engine.isActive() && engine.currentState() !== 'idle';
+
+  // Глобальные команды внутри активного урока: выполняем своё дело,
+  // но не выталкиваем пользователя из текущей задачи/квиза.
+  if (activeLesson && isCourseGlobalCommand(trimmed)) {
+    handleMeta(trimmed);
+    if (engine.isActive() && engine.currentState() !== 'idle') {
+      restoreTaskPrompt();
+      // Если команда одновременно есть в симуляторе (например, help),
+      // пропускаем её через движок, чтобы задача могла засчитаться.
+      if (engine.currentState() === 'terminal' && isSimulatorCommand(trimmed)) {
+        engine.handleInput(trimmed);
+      }
+    }
     ui.focus();
     return;
   }
 
   // Если урок активен и ожидает ввода, отдаём движку.
-  if (engine.isActive() && engine.currentState() !== 'idle') {
+  if (activeLesson) {
     engine.handleInput(trimmed);
     ui.focus();
     return;
   }
 
-  // Иначе — свободный shell.
+  // Свободный режим: мета-команды или симулятор.
+  if (handleMeta(trimmed)) {
+    ui.focus();
+    return;
+  }
+
   runFreeShellCommand(trimmed);
   ui.focus();
 }
@@ -425,3 +499,6 @@ if (onboardingAction) {
 }
 
 init();
+
+// Экспорты для smoke-тестов сценариев.
+export { handleCommand, engine, ui, loadLessonByIndex };

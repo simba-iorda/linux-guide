@@ -211,87 +211,6 @@ function htmlToLines(html) {
   return out;
 }
 
-function wrapText(text, width) {
-  if (width <= 0) return [String(text)];
-  const words = String(text).split(/\s+/);
-  const lines = [];
-  let cur = '';
-  for (const word of words) {
-    if (!word) continue;
-    if (word.length > width) {
-      if (cur) { lines.push(cur); cur = ''; }
-      for (let i = 0; i < word.length; i += width) {
-        lines.push(word.slice(i, i + width));
-      }
-      continue;
-    }
-    const sep = cur ? ' ' : '';
-    if (cur.length + sep.length + word.length <= width) {
-      cur += sep + word;
-    } else {
-      lines.push(cur);
-      cur = word;
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.length ? lines : [''];
-}
-
-function renderTable(rows, maxWidth) {
-  const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
-  if (!colCount) return [];
-  const paddedRows = rows.map(r => {
-    const arr = r.slice();
-    while (arr.length < colCount) arr.push('');
-    return arr;
-  });
-
-  const widths = Array(colCount).fill(0);
-  paddedRows.forEach(r => {
-    r.forEach((cell, i) => {
-      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, l.length), 0);
-      widths[i] = Math.max(widths[i], maxLine);
-    });
-  });
-
-  const minWidth = 3;
-  const totalNatural = widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
-  if (totalNatural > maxWidth) {
-    let excess = totalNatural - maxWidth;
-    while (excess > 0) {
-      const widest = widths
-        .map((w, i) => ({ w, i }))
-        .filter(x => x.w > minWidth)
-        .sort((a, b) => b.w - a.w)[0];
-      if (!widest) break;
-      widths[widest.i]--;
-      excess--;
-    }
-  }
-
-  const wrappedRows = paddedRows.map(r => r.map((cell, i) => wrapText(String(cell), widths[i])));
-  const out = [];
-  const top = '┌' + widths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
-  const sep = '├' + widths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
-  const bottom = '└' + widths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
-
-  out.push({ className: 'table', text: top });
-  paddedRows.forEach((r, rowIdx) => {
-    const cellLines = wrappedRows[rowIdx];
-    const height = cellLines.reduce((m, lines) => Math.max(m, lines.length), 0);
-    const isHeader = rowIdx === 0;
-    for (let l = 0; l < height; l++) {
-      const lineText = '│ ' + cellLines.map((lines, i) => (lines[l] || '').padEnd(widths[i])).join(' │ ') + ' │';
-      out.push({ className: isHeader ? 'table-header' : 'table', text: lineText });
-    }
-    if (rowIdx === 0 && paddedRows.length > 1) {
-      out.push({ className: 'table', text: sep });
-    }
-  });
-  out.push({ className: 'table', text: bottom });
-  return out;
-}
-
 function parseSegments(md) {
   const segments = [];
   const regex = /^```(quiz|terminal)\s*\n([\s\S]*?)\n```$/gm;
@@ -359,8 +278,13 @@ function appendLineTo(container, text, className) {
 function renderTextLines(lines, container, ui) {
   for (const line of lines) {
     if (line && line.type === 'table') {
-      const tableLines = renderTable(line.rows, ui.getTableMaxWidth());
-      tableLines.forEach(tl => appendLineTo(container, tl.text, tl.className));
+      if (ui && ui.createTableBlock) {
+        const block = ui.createTableBlock(line.rows);
+        container.appendChild(block);
+      } else {
+        // fallback: простой список строк
+        line.rows.forEach(r => appendLineTo(container, r.join(' | '), 'output'));
+      }
     } else if (line && line.type === 'details') {
       const wrap = document.createElement('div');
       wrap.className = 'details-block';
@@ -510,11 +434,12 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     const line = raw.trim();
     if (!line) return;
 
-    if (line === 'подсказка') {
+    const low = line.toLowerCase();
+    if (low === 'подсказка' || low === 'hint') {
       ui.appendLine(currentTask.hint || 'Попробуй выполнить команду из условия.', 'hint');
       return;
     }
-    if (line === 'решение') {
+    if (low === 'решение' || low === 'solution') {
       const sol = Array.isArray(currentTask.solution) ? currentTask.solution.join('\n') : '';
       ui.appendLine(sol || 'Решение не задано.', 'solution');
       return;
@@ -527,7 +452,7 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     } else if (result.stdout) {
       if (result.exit !== 0 && isUnknownCommandError(result.stdout)) {
         ui.appendError(`bash: ${line.split(/\s+/)[0]}: команда не найдена`);
-        ui.appendLine('набери помощь', 'comment');
+        ui.appendLine('это задача — вводи команды из условия, или набери подсказка', 'comment');
       } else {
         ui.appendLines(result.stdout, 'output');
       }
