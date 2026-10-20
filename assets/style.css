@@ -176,59 +176,30 @@ body {
 .hint { color: var(--muted); padding-left: 2ch; border-left: 2px solid var(--surface-1); }
 .solution { color: var(--muted); padding-left: 2ch; border-left: 2px solid var(--surface-1); }
 
-/* ---------- таблицы в терминальном стиле (DOM/CSS grid) ---------- */
+/* ---------- таблицы в терминальном стиле (box-drawing) ---------- */
 .hidden { display: none !important; }
 
-.table-block {
-  margin: 0.4rem 0;
+.line.table {
+  color: var(--fg);
+  white-space: pre;
+  word-break: normal;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
-
-.term-table {
-  display: grid;
-  border: 1px solid var(--surface-1);
-  border-radius: 2px;
-  overflow-x: auto;
-  font-size: 0.95em;
-}
-
-.term-table-cell {
-  padding: 0.35rem 0.6rem;
-  border-right: 1px solid var(--surface-1);
-  border-bottom: 1px solid var(--surface-1);
-  overflow-wrap: break-word;
-  word-break: break-word;
-  min-width: 0;
-  line-height: 1.5;
-}
-
-.term-table-cell:last-child {
-  border-right: none;
-}
-
-.term-table-cell:nth-last-child(-n + 1) {
-  border-bottom: none;
-}
-
-.term-table-header {
+.line.table-header {
   color: var(--accent);
   font-weight: 700;
-  background: color-mix(in srgb, var(--surface) 50%, transparent);
+  white-space: pre;
+  word-break: normal;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
-
-.term-table.vertical {
-  display: block;
-  border: none;
-}
-
-.term-table-record {
-  border: 1px solid var(--surface-1);
-  padding: 0.4rem 0.6rem;
-  margin-bottom: 0.4rem;
-  border-radius: 2px;
-}
-
-.record-sep {
-  margin: 0.2rem 0;
+.wide-char {
+  display: inline-block;
+  width: 2ch;
+  text-align: center;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
 
 /* ---------- задачи и квизы ---------- */

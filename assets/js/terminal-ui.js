@@ -29,16 +29,103 @@ export function formatPrompt(shell, cwd) {
   }
 }
 
-/* ---------- таблицы: вспомогательные функции ---------- */
-function hasEmoji(str) {
-  return /\p{Emoji_Presentation}/u.test(String(str));
+/* ---------- таблицы: честный ASCII/box-drawing рендер ---------- */
+const graphemeSegmenter = (typeof Intl !== 'undefined' && Intl.Segmenter)
+  ? new Intl.Segmenter('ru', { granularity: 'grapheme' })
+  : null;
+
+function graphemeClusters(str) {
+  if (graphemeSegmenter) {
+    return Array.from(graphemeSegmenter.segment(str), s => s.segment);
+  }
+  // Fallback для старых сред: по кодпоинтам.
+  return Array.from(str);
 }
 
-function measureChars(str) {
-  // Эмодзи обычно шире 1ch; учитываем это при выборе горизонтального/вертикального макета.
-  const base = Array.from(String(str)).length;
-  const extra = (String(str).match(/\p{Emoji_Presentation}/gu) || []).length;
-  return base + extra;
+function isWideCodepoint(cp) {
+  if (cp >= 0x4E00 && cp <= 0x9FFF) return true; // CJK Unified Ideographs
+  if (cp >= 0x3400 && cp <= 0x4DBF) return true; // CJK Extension A
+  if (cp >= 0x3040 && cp <= 0x309F) return true; // Hiragana
+  if (cp >= 0x30A0 && cp <= 0x30FF) return true; // Katakana
+  if (cp >= 0xAC00 && cp <= 0xD7AF) return true; // Hangul Syllables
+  if (cp >= 0xFF01 && cp <= 0xFF60) return true; // Fullwidth ASCII
+  if (cp >= 0xFFE0 && cp <= 0xFFE6) return true; // Fullwidth symbol variants
+  return false;
+}
+
+function clusterWidth(cluster) {
+  // Полностью невидимые (маркеры, ZWJ, VS16 и др.) — 0.
+  const codepoints = Array.from(cluster);
+  if (codepoints.every(ch => /\p{M}|\p{Cf}/u.test(ch))) return 0;
+  // Эмодзи и пиктограммы — 2.
+  if (/\p{Extended_Pictographic}/u.test(cluster)) return 2;
+  // CJK / Fullwidth.
+  if (codepoints.some(ch => isWideCodepoint(ch.codePointAt(0) || 0))) return 2;
+  return 1;
+}
+
+function displayWidth(str) {
+  return graphemeClusters(str).reduce((sum, c) => sum + clusterWidth(c), 0);
+}
+
+function padEndDisplay(str, width) {
+  const w = displayWidth(str);
+  if (w >= width) return str;
+  return str + ' '.repeat(width - w);
+}
+
+function wrapTextDisplay(text, width) {
+  if (width <= 0) return [String(text)];
+  const tokens = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  let curW = 0;
+  for (const tok of tokens) {
+    const tokW = displayWidth(tok);
+    if (tokW > width) {
+      if (cur) { lines.push(cur); cur = ''; curW = 0; }
+      let part = '';
+      let partW = 0;
+      for (const cluster of graphemeClusters(tok)) {
+        const cw = clusterWidth(cluster);
+        if (partW + cw > width) {
+          if (part) lines.push(part);
+          part = '';
+          partW = 0;
+        }
+        part += cluster;
+        partW += cw;
+      }
+      if (part) { cur = part; curW = partW; }
+      continue;
+    }
+    const sepW = cur ? 1 : 0;
+    if (curW + sepW + tokW <= width) {
+      cur = cur ? cur + ' ' + tok : tok;
+      curW += sepW + tokW;
+    } else {
+      lines.push(cur);
+      cur = tok;
+      curW = tokW;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+// Оборачиваем широкие/эмодзи символы в inline-block фиксированной ширины,
+// чтобы fallback-шрифт не сдвигал колонки.
+function renderCellHtml(text) {
+  const clusters = graphemeClusters(text);
+  if (!clusters.length) return '';
+  return clusters.map(c => {
+    const w = clusterWidth(c);
+    const esc = escapeHtml(c);
+    if (w === 2) {
+      return `<span class="wide-char" style="display:inline-block;width:2ch">${esc}</span>`;
+    }
+    return esc;
+  }).join('');
 }
 
 function tableNaturalChars(rows) {
@@ -48,22 +135,73 @@ function tableNaturalChars(rows) {
   rows.forEach(r => {
     for (let i = 0; i < colCount; i++) {
       const cell = r[i] || '';
-      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, measureChars(l)), 0);
+      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, displayWidth(l)), 0);
       widths[i] = Math.max(widths[i], maxLine);
     }
   });
-  // padding + рамки ≈ 3 символа на колонку + 1 на левую границу
   return widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
 }
 
-function buildInlineHtmlForCell(text) {
-  // Сначала экранируем HTML.
-  let html = escapeHtml(text);
-  // Заменяем обратные inline-маркеры на HTML. Поддерживаем ``code`` и **bold**.
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  return html;
+function renderTableRows(rows, maxWidth) {
+  const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  if (!colCount) return [];
+  const paddedRows = rows.map(r => {
+    const arr = r.slice();
+    while (arr.length < colCount) arr.push('');
+    return arr;
+  });
+
+  const widths = Array(colCount).fill(0);
+  paddedRows.forEach(r => {
+    r.forEach((cell, i) => {
+      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, displayWidth(l)), 0);
+      widths[i] = Math.max(widths[i], maxLine);
+    });
+  });
+
+  const totalNatural = widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
+
+  // Широкий экран — классическая таблица с рамкой.
+  if (totalNatural <= maxWidth) {
+    const wrappedRows = paddedRows.map(r => r.map((cell, i) => wrapTextDisplay(String(cell), widths[i])));
+    const out = [];
+    const top = '┌' + widths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
+    const sep = '├' + widths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
+    const bottom = '└' + widths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
+
+    out.push({ className: 'table', text: top });
+    paddedRows.forEach((r, rowIdx) => {
+      const cellLines = wrappedRows[rowIdx];
+      const height = cellLines.reduce((m, lines) => Math.max(m, lines.length), 0);
+      const isHeader = rowIdx === 0;
+      for (let l = 0; l < height; l++) {
+        const parts = cellLines.map((lines, i) => renderCellHtml(padEndDisplay(lines[l] || '', widths[i])));
+        const lineHtml = '│ ' + parts.join(' │ ') + ' │';
+        out.push({ className: isHeader ? 'table-header' : 'table', html: lineHtml });
+      }
+      if (rowIdx === 0 && paddedRows.length > 1) {
+        out.push({ className: 'table', text: sep });
+      }
+    });
+    out.push({ className: 'table', text: bottom });
+    return out;
+  }
+
+  // Узкий экран — вертикальные карточки.
+  const headers = paddedRows[0];
+  const out = [];
+  paddedRows.slice(1).forEach((r, idx) => {
+    for (let colIdx = 0; colIdx < colCount; colIdx++) {
+      const header = headers[colIdx] || '';
+      const value = r[colIdx] || '';
+      const html = `<span class="table-header">${escapeHtml(header)}:</span> ${renderCellHtml(value)}`;
+      out.push({ className: 'table', html });
+    }
+    if (idx < paddedRows.length - 2) {
+      out.push({ className: 'comment', text: '──' });
+    }
+  });
+  return out;
 }
 
 /* ---------- блоки задач и квизов ---------- */
@@ -433,52 +571,17 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     block.className = 'table-block';
 
     function redraw() {
-      const maxWidth = getTableMaxWidth();
-      const natural = tableNaturalChars(rows);
-      const horizontal = natural <= maxWidth;
+      const lines = renderTableRows(rows, getTableMaxWidth());
       block.innerHTML = '';
-      block.classList.toggle('horizontal', horizontal);
-      block.classList.toggle('vertical', !horizontal);
-
-      const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
-      const paddedRows = rows.map(r => {
-        const arr = r.slice();
-        while (arr.length < colCount) arr.push('');
-        return arr;
-      });
-
-      if (horizontal) {
-        const table = document.createElement('div');
-        table.className = 'term-table';
-        table.style.gridTemplateColumns = `repeat(${colCount}, minmax(0, max-content))`;
-        paddedRows.forEach((r, rowIdx) => {
-          r.forEach((cell) => {
-            const div = document.createElement('div');
-            div.className = 'term-table-cell' + (rowIdx === 0 ? ' term-table-header' : '');
-            div.innerHTML = buildInlineHtmlForCell(String(cell));
-            table.appendChild(div);
-          });
-        });
-        block.appendChild(table);
-      } else {
-        const headers = paddedRows[0];
-        paddedRows.slice(1).forEach((r, idx) => {
-          const record = document.createElement('div');
-          record.className = 'term-table-record';
-          for (let i = 0; i < colCount; i++) {
-            const line = document.createElement('div');
-            line.className = 'line table';
-            line.innerHTML = `<span class="table-header">${escapeHtml(headers[i] || '')}:</span> ${escapeHtml(r[i] || '')}`;
-            record.appendChild(line);
-          }
-          block.appendChild(record);
-          if (idx < paddedRows.length - 2) {
-            const sep = document.createElement('div');
-            sep.className = 'line comment record-sep';
-            sep.textContent = '──';
-            block.appendChild(sep);
-          }
-        });
+      for (const l of lines) {
+        const div = document.createElement('div');
+        div.className = 'line ' + (l.className || 'output');
+        if (l.html != null) {
+          div.innerHTML = l.html;
+        } else {
+          div.textContent = l.text;
+        }
+        block.appendChild(div);
       }
     }
 
@@ -494,6 +597,13 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
       tableBlocks.forEach(b => b._redraw && b._redraw());
     });
     ro.observe(terminal);
+  }
+
+  // Перерендер после загрузки шрифтов — метрика может измениться.
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      tableBlocks.forEach(b => b._redraw && b._redraw());
+    });
   }
 
   function onScroll(cb) {
