@@ -3,6 +3,7 @@
  * задач и квизов в едином терминальном потоке.
  */
 import { setLessonTotal, markQuiz, markTerminal, isQuizDone, isTerminalDone } from './progress.js';
+import { formatPrompt } from './terminal-ui.js';
 
 const Simulator = globalThis.TerminalSimulator;
 const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
@@ -34,7 +35,6 @@ function isInlineTag(tag) {
 function buildInlineHtml(node) {
   if (node.nodeType === Node.TEXT_NODE) {
     const t = node.textContent;
-    // Collapse internal whitespace to a single space, but keep leading/trailing?
     return escapeHtml(t.replace(/\s+/g, ' '));
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return '';
@@ -181,8 +181,6 @@ function processNode(node, prefix, out) {
     }
   }
 
-  // Обычный контейнер (p, div, blockquote, td, li и т.п.): собираем инлайн
-  // и рекурсивно обходим блочных детей.
   const buf = new InlineBuffer(prefix, out);
   for (const child of node.childNodes) {
     if (child.nodeType === Node.TEXT_NODE) {
@@ -282,7 +280,6 @@ function renderTextLines(lines, container, ui) {
         const block = ui.createTableBlock(line.rows);
         container.appendChild(block);
       } else {
-        // fallback: простой список строк
         line.rows.forEach(r => appendLineTo(container, r.join(' | '), 'output'));
       }
     } else if (line && line.type === 'details') {
@@ -331,8 +328,10 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
   let currentTask = null;
   let currentTaskId = null;
   let currentTaskSession = null;
+  let currentTaskBlock = null;
   let currentQuiz = null;
   let currentQuizId = null;
+  let currentQuizBlock = null;
   let taskPassed = false;
 
   function reset() {
@@ -343,8 +342,10 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     currentTask = null;
     currentTaskId = null;
     currentTaskSession = null;
+    currentTaskBlock = null;
     currentQuiz = null;
     currentQuizId = null;
+    currentQuizBlock = null;
     taskPassed = false;
   }
 
@@ -365,6 +366,10 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     advance();
   }
 
+  function appendBlock(block) {
+    if (block && block.element) ui.appendRaw(block.element);
+  }
+
   function advance() {
     while (stepIndex < steps.length) {
       const step = steps[stepIndex];
@@ -373,30 +378,36 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
         stepIndex++;
       } else if (step.type === 'terminal') {
         if (isTerminalDone(`${lessonId}-${step.id}`)) {
-          ui.appendComment(`задача: ${step.data.task}`);
-          ui.appendSuccess('Задача выполнена ✓');
+          appendBlock(ui.createDoneTaskBlock({ task: step.data.task }));
           stepIndex++;
           continue;
         }
         currentTask = step.data;
         currentTaskId = step.id;
         taskPassed = false;
+        currentTaskBlock = null;
         const shell = step.data.shell || getUserShell();
         currentTaskSession = Simulator.createSession(Object.assign({}, step.data.setup || {}, { shell }));
+        currentTaskBlock = ui.createTaskBlock({
+          task: step.data.task,
+          hint: step.data.hint,
+          solution: step.data.solution
+        });
+        appendBlock(currentTaskBlock);
         ui.setPrompt(shell, currentTaskSession.cwd);
-        ui.appendComment(`задача: ${step.data.task}`);
         state = 'terminal';
         stepIndex++;
         return;
       } else if (step.type === 'quiz') {
         if (isQuizDone(`${lessonId}-${step.id}`)) {
-          renderQuiz(step.data, true);
+          appendBlock(ui.createDoneQuizBlock(step.data));
           stepIndex++;
           continue;
         }
         currentQuiz = step.data;
         currentQuizId = step.id;
-        renderQuiz(step.data, false);
+        currentQuizBlock = ui.createQuizBlock(step.data);
+        appendBlock(currentQuizBlock);
         state = 'quiz';
         stepIndex++;
         return;
@@ -405,22 +416,13 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     finishLesson();
   }
 
-  function renderQuiz(data, done) {
-    ui.appendLine(`[?] ${data.question}`, 'quiz-question');
-    data.options.forEach((opt, i) => {
-      ui.appendLine(`${LETTERS[i]}) ${opt}`, 'quiz-option');
-    });
-    if (done) {
-      ui.appendSuccess('Верно');
-      if (data.explanation) ui.appendComment(data.explanation);
-    }
-  }
-
   function finishLesson() {
     state = 'idle';
     currentTask = null;
     currentTaskSession = null;
+    currentTaskBlock = null;
     currentQuiz = null;
+    currentQuizBlock = null;
     ui.setPrompt(getUserShell(), '/home/user');
     ui.appendComment('урок завершён. Набери дальше, чтобы перейти к следующему.');
     if (onDone) onDone(lessonId);
@@ -436,25 +438,28 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
 
     const low = line.toLowerCase();
     if (low === 'подсказка' || low === 'hint') {
-      ui.appendLine(currentTask.hint || 'Попробуй выполнить команду из условия.', 'hint');
+      if (currentTaskBlock) currentTaskBlock.showHint();
       return;
     }
     if (low === 'решение' || low === 'solution') {
-      const sol = Array.isArray(currentTask.solution) ? currentTask.solution.join('\n') : '';
-      ui.appendLine(sol || 'Решение не задано.', 'solution');
+      if (currentTaskBlock) currentTaskBlock.showSolution();
       return;
     }
 
-    ui.appendCommandLine(line);
+    if (currentTaskBlock) {
+      currentTaskBlock.appendCommand(formatPrompt(currentTaskSession.shell, currentTaskSession.cwd) + ' ', line);
+    }
     const result = Simulator.exec(currentTaskSession, line);
     if (result.clear) {
       ui.clearScrollback();
     } else if (result.stdout) {
       if (result.exit !== 0 && isUnknownCommandError(result.stdout)) {
-        ui.appendError(`bash: ${line.split(/\s+/)[0]}: команда не найдена`);
-        ui.appendLine('это задача — вводи команды из условия, или набери подсказка', 'comment');
+        if (currentTaskBlock) {
+          currentTaskBlock.appendOutput(`bash: ${line.split(/\s+/)[0]}: команда не найдена`, 'error');
+          currentTaskBlock.appendOutput('это задача — вводи команды из условия, или набери подсказка', 'comment');
+        }
       } else {
-        ui.appendLines(result.stdout, 'output');
+        if (currentTaskBlock) currentTaskBlock.appendOutput(result.stdout, 'output');
       }
     }
     ui.setPrompt(currentTaskSession.shell, currentTaskSession.cwd);
@@ -463,11 +468,12 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
       const check = Simulator.runChecks(currentTaskSession, currentTask.check || []);
       if (check.passed) {
         taskPassed = true;
-        ui.appendSuccess('Задача выполнена ✓');
+        if (currentTaskBlock) currentTaskBlock.markDone();
         markTerminal(lessonId, `${lessonId}-${currentTaskId}`);
         state = 'idle';
         currentTask = null;
         currentTaskSession = null;
+        currentTaskBlock = null;
         advance();
       }
     }
@@ -477,18 +483,18 @@ export function createLessonEngine({ ui, onDone, getUserShell, onSetUserShell })
     const answer = raw.trim().toLowerCase();
     const idx = LETTERS.indexOf(answer);
     if (idx < 0 || idx >= currentQuiz.options.length) {
-      ui.appendError('ответь буквой: a, b или c');
+      if (currentQuizBlock) currentQuizBlock.showInvalid('ответь буквой: a, b или c');
       return;
     }
     if (idx === currentQuiz.answer) {
-      ui.appendSuccess('Верно');
-      if (currentQuiz.explanation) ui.appendComment(currentQuiz.explanation);
+      if (currentQuizBlock) currentQuizBlock.showCorrect(currentQuiz.explanation);
       markQuiz(lessonId, `${lessonId}-${currentQuizId}`);
       state = 'idle';
       currentQuiz = null;
+      currentQuizBlock = null;
       advance();
     } else {
-      ui.appendError('неверно');
+      if (currentQuizBlock) currentQuizBlock.showInvalid('неверно');
     }
   }
 

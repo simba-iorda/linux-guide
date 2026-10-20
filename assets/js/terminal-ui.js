@@ -29,93 +29,172 @@ export function formatPrompt(shell, cwd) {
   }
 }
 
-/* ---------- таблицы ---------- */
-function wrapText(text, width) {
-  if (width <= 0) return [String(text)];
-  const words = String(text).split(/\s+/);
-  const lines = [];
-  let cur = '';
-  for (const word of words) {
-    if (!word) continue;
-    if (word.length > width) {
-      if (cur) { lines.push(cur); cur = ''; }
-      for (let i = 0; i < word.length; i += width) {
-        lines.push(word.slice(i, i + width));
-      }
-      continue;
-    }
-    const sep = cur ? ' ' : '';
-    if (cur.length + sep.length + word.length <= width) {
-      cur += sep + word;
-    } else {
-      lines.push(cur);
-      cur = word;
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.length ? lines : [''];
+/* ---------- таблицы: вспомогательные функции ---------- */
+function hasEmoji(str) {
+  return /\p{Emoji_Presentation}/u.test(String(str));
 }
 
-function renderTableRows(rows, maxWidth) {
+function measureChars(str) {
+  // Эмодзи обычно шире 1ch; учитываем это при выборе горизонтального/вертикального макета.
+  const base = Array.from(String(str)).length;
+  const extra = (String(str).match(/\p{Emoji_Presentation}/gu) || []).length;
+  return base + extra;
+}
+
+function tableNaturalChars(rows) {
   const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
-  if (!colCount) return [];
-  const paddedRows = rows.map(r => {
-    const arr = r.slice();
-    while (arr.length < colCount) arr.push('');
-    return arr;
-  });
-
+  if (!colCount) return 0;
   const widths = Array(colCount).fill(0);
-  paddedRows.forEach(r => {
-    r.forEach((cell, i) => {
-      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, l.length), 0);
+  rows.forEach(r => {
+    for (let i = 0; i < colCount; i++) {
+      const cell = r[i] || '';
+      const maxLine = String(cell).split('\n').reduce((m, l) => Math.max(m, measureChars(l)), 0);
       widths[i] = Math.max(widths[i], maxLine);
-    });
+    }
+  });
+  // padding + рамки ≈ 3 символа на колонку + 1 на левую границу
+  return widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
+}
+
+function buildInlineHtmlForCell(text) {
+  // Сначала экранируем HTML.
+  let html = escapeHtml(text);
+  // Заменяем обратные inline-маркеры на HTML. Поддерживаем ``code`` и **bold**.
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return html;
+}
+
+/* ---------- блоки задач и квизов ---------- */
+function createTaskBlock({ task, hint, solution }) {
+  const root = document.createElement('div');
+  root.className = 'task-block';
+
+  const taskLine = document.createElement('div');
+  taskLine.className = 'line comment';
+  taskLine.textContent = `задача: ${task}`;
+  root.appendChild(taskLine);
+
+  const output = document.createElement('div');
+  output.className = 'task-output';
+  root.appendChild(output);
+
+  const hintEl = document.createElement('div');
+  hintEl.className = 'line hint hidden';
+  hintEl.textContent = hint || 'Попробуй выполнить команду из условия.';
+  root.appendChild(hintEl);
+
+  const solutionEl = document.createElement('div');
+  solutionEl.className = 'line solution hidden';
+  const sol = Array.isArray(solution) ? solution.join('\n') : (solution || '');
+  solutionEl.textContent = sol || 'Решение не задано.';
+  root.appendChild(solutionEl);
+
+  const successEl = document.createElement('div');
+  successEl.className = 'line success hidden';
+  successEl.textContent = 'Задача выполнена ✓';
+  root.appendChild(successEl);
+
+  function appendLineToOutput(text, className = 'output') {
+    const div = document.createElement('div');
+    div.className = 'line ' + className;
+    div.textContent = text;
+    output.appendChild(div);
+  }
+
+  return {
+    element: root,
+    appendCommand(promptText, cmdText) {
+      appendLineToOutput(promptText + cmdText, 'prompt-line');
+    },
+    appendOutput(text, className = 'output') {
+      const lines = String(text).split('\n');
+      const endsNewline = text.endsWith('\n');
+      lines.forEach((l, i) => {
+        if (i === lines.length - 1 && l === '' && endsNewline) return;
+        appendLineToOutput(l, className);
+      });
+    },
+    showHint() { hintEl.classList.remove('hidden'); },
+    showSolution() { solutionEl.classList.remove('hidden'); },
+    markDone() { successEl.classList.remove('hidden'); }
+  };
+}
+
+function createDoneTaskBlock({ task }) {
+  const root = document.createElement('div');
+  root.className = 'task-block done';
+  const taskLine = document.createElement('div');
+  taskLine.className = 'line comment';
+  taskLine.textContent = `задача: ${task}`;
+  root.appendChild(taskLine);
+  const success = document.createElement('div');
+  success.className = 'line success';
+  success.textContent = 'Задача выполнена ✓';
+  root.appendChild(success);
+  return { element: root };
+}
+
+function createQuizBlock(data) {
+  const root = document.createElement('div');
+  root.className = 'quiz-block';
+
+  const q = document.createElement('div');
+  q.className = 'line quiz-question';
+  q.textContent = `[?] ${data.question}`;
+  root.appendChild(q);
+
+  const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
+  data.options.forEach((opt, i) => {
+    const line = document.createElement('div');
+    line.className = 'line quiz-option';
+    line.textContent = `${LETTERS[i]}) ${opt}`;
+    root.appendChild(line);
   });
 
-  const totalNatural = widths.reduce((a, b) => a + b, 0) + 3 * colCount + 1;
+  const feedback = document.createElement('div');
+  feedback.className = 'line quiz-feedback hidden';
+  root.appendChild(feedback);
 
-  // Широкий экран — классическая таблица с рамкой.
-  if (totalNatural <= maxWidth) {
-    const wrappedRows = paddedRows.map(r => r.map((cell, i) => wrapText(String(cell), widths[i])));
-    const out = [];
-    const top = '┌' + widths.map(w => '─'.repeat(w + 2)).join('┬') + '┐';
-    const sep = '├' + widths.map(w => '─'.repeat(w + 2)).join('┼') + '┤';
-    const bottom = '└' + widths.map(w => '─'.repeat(w + 2)).join('┴') + '┘';
-
-    out.push({ className: 'table', text: top });
-    paddedRows.forEach((r, rowIdx) => {
-      const cellLines = wrappedRows[rowIdx];
-      const height = cellLines.reduce((m, lines) => Math.max(m, lines.length), 0);
-      const isHeader = rowIdx === 0;
-      for (let l = 0; l < height; l++) {
-        const lineText = '│ ' + cellLines.map((lines, i) => (lines[l] || '').padEnd(widths[i])).join(' │ ') + ' │';
-        out.push({ className: isHeader ? 'table-header' : 'table', text: lineText });
-      }
-      if (rowIdx === 0 && paddedRows.length > 1) {
-        out.push({ className: 'table', text: sep });
-      }
-    });
-    out.push({ className: 'table', text: bottom });
-    return out;
-  }
-
-  // Узкий экран — вертикальные карточки.
-  const headers = paddedRows[0];
-  const out = [];
-  for (let rowIdx = 1; rowIdx < paddedRows.length; rowIdx++) {
-    const row = paddedRows[rowIdx];
-    for (let colIdx = 0; colIdx < colCount; colIdx++) {
-      const header = headers[colIdx] || '';
-      const value = row[colIdx] || '';
-      const html = `<span class="table-header">${escapeHtml(header)}:</span> ${escapeHtml(value)}`;
-      out.push({ className: 'table', html });
+  return {
+    element: root,
+    showInvalid(msg) {
+      feedback.className = 'line quiz-feedback error';
+      feedback.textContent = msg;
+    },
+    showCorrect(explanation) {
+      feedback.className = 'line quiz-feedback success';
+      feedback.textContent = explanation ? `Верно — ${explanation}` : 'Верно';
     }
-    if (rowIdx < paddedRows.length - 1) {
-      out.push({ className: 'comment', text: '──' });
-    }
+  };
+}
+
+function createDoneQuizBlock(data) {
+  const root = document.createElement('div');
+  root.className = 'quiz-block done';
+  const q = document.createElement('div');
+  q.className = 'line quiz-question';
+  q.textContent = `[?] ${data.question}`;
+  root.appendChild(q);
+  const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
+  data.options.forEach((opt, i) => {
+    const line = document.createElement('div');
+    line.className = 'line quiz-option';
+    line.textContent = `${LETTERS[i]}) ${opt}`;
+    root.appendChild(line);
+  });
+  const ok = document.createElement('div');
+  ok.className = 'line success';
+  ok.textContent = 'Верно';
+  root.appendChild(ok);
+  if (data.explanation) {
+    const exp = document.createElement('div');
+    exp.className = 'line comment';
+    exp.textContent = data.explanation;
+    root.appendChild(exp);
   }
-  return out;
+  return { element: root };
 }
 
 export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
@@ -155,7 +234,6 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
 
   function appendLines(text, className = 'output') {
     const lines = String(text).split('\n');
-    // Preserve trailing empty line semantics similar to terminal output.
     const endsNewline = text.endsWith('\n');
     lines.forEach((l, i) => {
       if (i === lines.length - 1 && l === '' && endsNewline) return;
@@ -165,6 +243,11 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
 
   function appendCommandLine(cmdText) {
     appendLine(prompt.textContent + cmdText, 'prompt-line');
+  }
+
+  function appendRaw(node) {
+    scrollback.appendChild(node);
+    maybeScroll();
   }
 
   function maybeScroll() {
@@ -309,11 +392,6 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   function appendSuccess(text) { appendLine(text, 'success'); }
   function appendError(text) { appendLine(text, 'error'); }
 
-  function appendRaw(node) {
-    scrollback.appendChild(node);
-    maybeScroll();
-  }
-
   function appendAnchor() {
     const el = document.createElement('div');
     el.className = 'lesson-anchor';
@@ -353,20 +431,57 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
   function createTableBlock(rows) {
     const block = document.createElement('div');
     block.className = 'table-block';
+
     function redraw() {
-      const lines = renderTableRows(rows, getTableMaxWidth());
+      const maxWidth = getTableMaxWidth();
+      const natural = tableNaturalChars(rows);
+      const horizontal = natural <= maxWidth;
       block.innerHTML = '';
-      for (const l of lines) {
-        const div = document.createElement('div');
-        div.className = 'line ' + (l.className || 'output');
-        if (l.html != null) {
-          div.innerHTML = l.html;
-        } else {
-          div.textContent = l.text;
-        }
-        block.appendChild(div);
+      block.classList.toggle('horizontal', horizontal);
+      block.classList.toggle('vertical', !horizontal);
+
+      const colCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+      const paddedRows = rows.map(r => {
+        const arr = r.slice();
+        while (arr.length < colCount) arr.push('');
+        return arr;
+      });
+
+      if (horizontal) {
+        const table = document.createElement('div');
+        table.className = 'term-table';
+        table.style.gridTemplateColumns = `repeat(${colCount}, minmax(0, max-content))`;
+        paddedRows.forEach((r, rowIdx) => {
+          r.forEach((cell) => {
+            const div = document.createElement('div');
+            div.className = 'term-table-cell' + (rowIdx === 0 ? ' term-table-header' : '');
+            div.innerHTML = buildInlineHtmlForCell(String(cell));
+            table.appendChild(div);
+          });
+        });
+        block.appendChild(table);
+      } else {
+        const headers = paddedRows[0];
+        paddedRows.slice(1).forEach((r, idx) => {
+          const record = document.createElement('div');
+          record.className = 'term-table-record';
+          for (let i = 0; i < colCount; i++) {
+            const line = document.createElement('div');
+            line.className = 'line table';
+            line.innerHTML = `<span class="table-header">${escapeHtml(headers[i] || '')}:</span> ${escapeHtml(r[i] || '')}`;
+            record.appendChild(line);
+          }
+          block.appendChild(record);
+          if (idx < paddedRows.length - 2) {
+            const sep = document.createElement('div');
+            sep.className = 'line comment record-sep';
+            sep.textContent = '──';
+            block.appendChild(sep);
+          }
+        });
       }
     }
+
     redraw();
     block._redraw = redraw;
     tableBlocks.add(block);
@@ -405,6 +520,10 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     getScrollHeight,
     getClientHeight,
     createTableBlock,
+    createTaskBlock,
+    createDoneTaskBlock,
+    createQuizBlock,
+    createDoneQuizBlock,
     getScrollback: () => scrollback,
     setAutoScroll,
     onScroll,
