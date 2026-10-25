@@ -52,7 +52,7 @@
   --prompt-path: var(--k-blue);
 
   --pad: 10px;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Monaco, "Courier New", monospace;
+  --font-mono: "JetBrains Mono", "JetBrains Mono Box", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Monaco, "Courier New", monospace;
   --term-opacity: 0.92;
 }
 
