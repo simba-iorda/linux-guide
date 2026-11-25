@@ -87,11 +87,12 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```terminal
 {
+  "id": "t0",
   "title": "Что за система",
   "task": "Выведи полную информацию о системе одной командой и найди в ней имя ядра.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "Linux", "message": "в выводе видно имя ядра Linux" }
+    { "type": "output_contains", "commands": ["uname"], "text": "Linux", "message": "в выводе видно имя ядра Linux" }
   ],
   "solution": ["uname -a"],
   "hint": "Флаг -a значит all — «показать всё»"
@@ -100,11 +101,12 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```terminal
 {
+  "id": "t1",
   "title": "Память",
   "task": "Посмотри, сколько на машине оперативной памяти, в человеческих единицах. Найди в выводе строку total.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "total", "message": "виден столбец с общим объёмом памяти" }
+    { "type": "output_contains", "commands": ["free"], "text": "total", "message": "виден столбец с общим объёмом памяти" }
   ],
   "solution": ["free -h"],
   "hint": "free — про память, флаг -h включает гигабайты и мегабайты"
@@ -113,11 +115,12 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```terminal
 {
+  "id": "t2",
   "title": "Место на дисках",
   "task": "Посмотри свободное место по разделам. В выводе должны быть устройства вида /dev/sda1 и процент заполнения.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "/dev/", "message": "видны разделы и их заполнение" }
+    { "type": "output_contains", "commands": ["df"], "text": "/dev/", "message": "видны разделы и их заполнение" }
   ],
   "solution": ["df -h"],
   "hint": "df — сокращение от disk free"
@@ -128,6 +131,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```quiz
 {
+  "id": "q0",
   "question": "Чем free отличается от df?",
   "options": ["free — про оперативную память, df — про место на дисках", "free — про диски, df — про память", "Это одна и та же команда с разными названиями"],
   "answer": 0,
@@ -137,6 +141,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```quiz
 {
+  "id": "q1",
   "question": "В free -h колонка free показывает 1 ГБ из 16. Это опасно?",
   "options": ["Да, система скоро зависнет", "Нет: память занята кэшем диска и отдаётся программам по требованию", "Да, нужно немедленно закрыть все программы"],
   "answer": 1,
@@ -146,6 +151,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 
 ```quiz
 {
+  "id": "q2",
   "question": "Что покажет uname -a?",
   "options": ["Версию дистрибутива и список установленных пакетов", "Имя ядра, версию, имя машины и архитектуру", "Только имя пользователя"],
   "answer": 1,

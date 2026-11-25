@@ -86,11 +86,12 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```terminal
 {
+  "id": "t0",
   "title": "Домашняя папка в переменной",
   "task": "Выведи значение переменной HOME — так программы узнают, где твоя домашняя папка.",
   "setup": { "cwd": "/home/user", "tree": { ".bashrc": "alias ll='ls -lah'\nexport EDITOR=nano\n" } },
   "check": [
-    { "type": "output_contains", "text": "/home/user", "message": "переменная раскрылась в путь к домашней папке" }
+    { "type": "output_contains", "commands": ["echo"], "text": "/home/user", "message": "переменная раскрылась в путь к домашней папке" }
   ],
   "solution": ["echo \"$HOME\""],
   "hint": "Знак $ заставляет оболочку подставить значение переменной вместо её имени"
@@ -99,11 +100,12 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```terminal
 {
+  "id": "t1",
   "title": "Читаем свой .bashrc",
   "task": "Прочитай файл настроек .bashrc и найди там строку с алиасом ll — короткое имя для длинного списка файлов.",
   "setup": { "cwd": "/home/user", "tree": { ".bashrc": "alias ll='ls -lah'\nalias ..='cd ..'\nexport EDITOR=nano\n" } },
   "check": [
-    { "type": "output_contains", "text": "alias ll", "message": "в конфиге найден алиас ll" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "alias ll", "message": "в конфиге найден алиас ll" }
   ],
   "solution": ["cat .bashrc"],
   "hint": "Точка в начале имени — это скрытый файл, cat его прочитает без проблем"
@@ -112,6 +114,7 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```terminal
 {
+  "id": "t2",
   "title": "Дописываем настройку",
   "task": "Допиши в конец .bashrc строку, которая сделает редактором по умолчанию vim: export EDITOR=vim. Символ >> дописывает в конец файла, не затирая его.",
   "setup": { "cwd": "/home/user", "tree": { ".bashrc": "alias ll='ls -lah'\n" } },
@@ -127,6 +130,7 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```quiz
 {
+  "id": "q0",
   "question": "Где живут алиасы, которые должны работать в каждом новом терминале?",
   "options": ["В ~/.bashrc", "В /etc/passwd", "В ~/.ssh/config"],
   "answer": 0,
@@ -136,6 +140,7 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```quiz
 {
+  "id": "q1",
   "question": "Почему не работает команда EDITOR = nano?",
   "options": ["Переменные задают без пробелов вокруг знака =: EDITOR=nano", "Нужно писать set EDITOR nano", "Переменные может задавать только root"],
   "answer": 0,
@@ -145,6 +150,7 @@ source ~/.bashrc        # применяем сейчас, не открывая
 
 ```quiz
 {
+  "id": "q2",
   "question": "Чем export отличается от обычного присваивания?",
   "options": ["Делает переменную видимой для всех запускаемых программ", "Делает переменную невидимой", "Ускоряет выполнение команд"],
   "answer": 0,

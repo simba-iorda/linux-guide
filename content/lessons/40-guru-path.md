@@ -21,7 +21,7 @@ outcome: "Ты знаешь карту дальнейшего роста и ку
 | 2. Файлы | Создавать, читать, искать и соединять команды пайпами |
 | 3. Права | Пользователи, rwx, chmod/chown, sudo |
 | 4. Процессы | ps/top, сигналы, kill, свободные ресурсы |
-| 5. Оболочка | Переменные, скрипты, fish/zsh, оформление |
+| 5. Оболочка | Переменные, скрипты, история, потоки и оформление |
 | 6. Сеть | IP/DNS/порты, ping/curl, SSH, scp/rsync |
 | 7. Сервисы | Пакеты, systemd, логи, cron |
 | 8. Гуру | Производительность, архивы/бэкапы, безопасность, финальный проект |
@@ -67,9 +67,9 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 ```terminal
 {
+  "id": "t0",
   "title": "План на потом",
   "task": "Запиши свой план развития в файл: echo \"learn: docker, ansible, monitoring\" > plan.txt.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "dotfiles": { "bashrc": "alias ll='ls -la'\n", ".gitignore": "" }, "dotfiles-backup": {} } },
   "check": [
     { "type": "file_contains", "path": "/home/user/plan.txt", "text": "learn:", "message": "план записан в файл" }
@@ -81,12 +81,12 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 ```terminal
 {
+  "id": "t1",
   "title": "Твои конфиги в одном месте",
   "task": "Загляни в папку dotfiles и убедись, что конфиги лежат вместе: ls -la dotfiles. Именно эту папку можно превратить в git-репозиторий.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "dotfiles": { "bashrc": "alias ll='ls -la'\n", ".gitignore": "" } } },
   "check": [
-    { "type": "output_contains", "text": "bashrc", "message": "конфиги лежат вместе в dotfiles" }
+    { "type": "output_contains", "commands": ["ls"], "text": "bashrc", "message": "конфиги лежат вместе в dotfiles" }
   ],
   "solution": ["ls -la dotfiles"],
   "hint": "ls -la покажет и скрытые файлы вроде .gitignore"
@@ -97,6 +97,7 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что даёт хранение своих конфигов в git?",
   "options": ["Историю правок и быстрый перенос на новую машину", "Ускоряет работу терминала", "Заменяет бэкап всей системы"],
   "answer": 0,
@@ -106,6 +107,7 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 ```quiz
 {
+  "id": "q1",
   "question": "Какой навык отличает уверенного пользователя от новичка?",
   "options": ["Умение войти в незнакомую систему и разобраться по шагам", "Знание всех флагов всех команд", "Память на 50 команд"],
   "answer": 0,
@@ -115,6 +117,7 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 ```quiz
 {
+  "id": "q2",
   "question": "Что делать, если забыл, как работает команда?",
   "options": ["man <команда> или tldr <команда>", "Переустановить систему", "Вспоминать наугад и запускать"],
   "answer": 0,
@@ -133,7 +136,7 @@ cd ~/dotfiles && git init && git add . && git commit -m "мои конфиги"
 
 Чтобы навык не остыл:
 
-1. Заведи репозиторий с конфигами: `mkdir ~/dotfiles`, перенеси туда `.bashrc` (или `config.fish`) и `.gitconfig`, поставь симлинки, сделай `git init` и первый коммит.
+1. Заведи репозиторий с конфигами: `mkdir ~/dotfiles`, перенеси туда `.bashrc` и `.gitconfig`, поставь симлинки, сделай `git init` и первый коммит.
 2. Выбери одну дорогу из урока и одно маленькое дело на выходных: подними домашний сервер, поставь Docker, напиши скрипт-бэкап с уведомлением.
 3. Поставь `tldr`: `sudo apt install tldr` (или `dnf install tldr`, `pacman -S tldr`) — и пользуйся им вместо гугла.
 4. Пройди первые 10 уровней OverTheWire: Bandit — это закрепит уверенность в терминале.

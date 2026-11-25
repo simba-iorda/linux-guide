@@ -89,6 +89,7 @@ done
 
 ```terminal
 {
+  "id": "t0",
   "title": "Первая строка: shebang",
   "task": "Создай файл backup.sh и положи в него первой строкой shebang: #!/usr/bin/env bash. Символ > запишет строку в файл.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
@@ -102,6 +103,7 @@ done
 
 ```terminal
 {
+  "id": "t1",
   "title": "Вторая строка: действие",
   "task": "Допиши в backup.sh строку с командой echo, которая печатает текст: echo Резервная копия готова. Двойной символ >> дописывает в конец.",
   "setup": { "cwd": "/home/user", "tree": { "backup.sh": "#!/usr/bin/env bash\n" } },
@@ -115,11 +117,12 @@ done
 
 ```terminal
 {
+  "id": "t2",
   "title": "Читаем, что получилось",
   "task": "Выведи содержимое backup.sh и убедись, что скрипт состоит из shebang и одной команды. На своей машине после этого ты сделаешь chmod +x и запустишь ./backup.sh.",
   "setup": { "cwd": "/home/user", "tree": { "backup.sh": "#!/usr/bin/env bash\necho Резервная копия готова\n" } },
   "check": [
-    { "type": "output_contains", "text": "#!", "message": "на экране содержимое скрипта вместе с shebang" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "#!", "message": "на экране содержимое скрипта вместе с shebang" }
   ],
   "solution": ["cat backup.sh"],
   "hint": "cat печатает файл целиком"
@@ -130,6 +133,7 @@ done
 
 ```quiz
 {
+  "id": "q0",
   "question": "Зачем нужна строка #!/usr/bin/env bash?",
   "options": ["Это комментарий, её можно убрать", "Она говорит системе, что файл нужно запускать оболочкой bash", "Она даёт файлу право на запуск"],
   "answer": 1,
@@ -139,6 +143,7 @@ done
 
 ```quiz
 {
+  "id": "q1",
   "question": "Почему скрипт запускают как ./script.sh, а не просто script.sh?",
   "options": ["Так короче", "Оболочка ищет команды в PATH, а текущей папки там нет — точкой мы указываем путь явно", "Иначе скрипт не увидит файлы рядом"],
   "answer": 1,
@@ -148,6 +153,7 @@ done
 
 ```quiz
 {
+  "id": "q2",
   "question": "Скрипт запущен командой ./greet.sh Linux. Что окажется в $1?",
   "options": ["Linux", "greet.sh", "Ничего, $1 не определён"],
   "answer": 0,

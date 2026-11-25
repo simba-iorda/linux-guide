@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const sim = require('/home/sevastyan/linux-tutorial/assets/js/simulator.js');
+const sim = require('./assets/js/simulator.js');
 
-const dir = '/home/sevastyan/linux-tutorial/content/lessons';
+const dir = path.join(__dirname, 'content', 'lessons');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
 const lessons = manifest.lessons, modules = manifest.modules;
 const problems = [];
@@ -37,6 +37,12 @@ for (const l of lessons) {
     pos = i;
   }
   if (!md.includes('Для любопытных')) problems.push(`${l.id}: нет блока «Для любопытных»`);
+  // IDs are explicit so editing the lesson does not move someone’s progress.
+  const ids = new Set();
+  const addId = block => {
+    if (typeof block.id !== 'string' || !block.id || ids.has(block.id)) problems.push(`${l.id}: отсутствует или повторяется ID ${block.id || 'блока'}`);
+    ids.add(block.id);
+  };
   // quiz blocks
   const qre = /```quiz\s*\n([\s\S]*?)```/g;
   let qm;
@@ -44,7 +50,8 @@ for (const l of lessons) {
     quizCount++;
     try {
       const q = JSON.parse(qm[1]);
-      if (!Array.isArray(q.options) || typeof q.answer !== 'number' || q.answer >= q.options.length) problems.push(`${l.id}: битый quiz`);
+      addId(q);
+      if (!Array.isArray(q.options) || !Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) problems.push(`${l.id}: битый quiz`);
     } catch (e) { problems.push(`${l.id}: quiz JSON: ${e.message}`); }
   }
   // terminal blocks: full run
@@ -55,15 +62,19 @@ for (const l of lessons) {
     let b;
     try { b = JSON.parse(tm[1]); }
     catch (e) { failed++; console.log(`FAIL ${l.id}#${idx}: JSON: ${e.message}`); continue; }
+    addId(b);
     const session = sim.createSession(b.setup);
     let execErr = null;
-    for (const cmd of b.solution || []) {
-      const r = sim.exec(session, cmd);
-      if (r && r.exit != null && r.exit !== 0) { execErr = `"${cmd}" -> exit ${r.exit}: ${String(r.stdout || '').trim().slice(0, 90)}`; break; }
+    for (const [step, cmd] of (b.solution || []).entries()) {
+      const result = sim.exec(session, cmd);
+      if (result.exit !== (b.expectedExit?.[step] ?? 0)) {
+        execErr = `"${cmd}" -> exit ${result.exit}: ${(result.stderr || result.stdout).trim().slice(0, 90)}`;
+        break;
+      }
     }
     if (execErr) { failed++; console.log(`FAIL ${l.id}#${idx}: ${execErr}`); continue; }
     const res = sim.runChecks(session, b.check);
-    if (res.passed) console.log(`PASS ${l.id}#${idx}${b.shell ? ` [${b.shell}]` : ''}`);
+    if (res.passed) console.log(`PASS ${l.id}#${idx}`);
     else { failed++; console.log(`FAIL ${l.id}#${idx}: ${JSON.stringify(res.failures)}`); }
   }
 }

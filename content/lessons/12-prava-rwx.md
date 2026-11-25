@@ -68,6 +68,7 @@ cat: secret.txt: Permission denied
 
 ```terminal
 {
+  "id": "t0",
   "title": "Читаем строку прав",
   "task": "Посмотри подробный список файлов и найди в начале строки комбинацию rw-r--r-- — так выглядят права обычного файла.",
   "setup": {
@@ -78,7 +79,7 @@ cat: secret.txt: Permission denied
     }
   },
   "check": [
-    { "type": "output_contains", "text": "-rw-r--r--", "message": "видны права владельца, группы и остальных" }
+    { "type": "output_contains", "commands": ["ls"], "text": "-rw-r--r--", "message": "видны права владельца, группы и остальных" }
   ],
   "solution": ["ls -l"],
   "hint": "Флаг -l означает long — «длинный формат», с правами, владельцем, размером и датой"
@@ -87,6 +88,7 @@ cat: secret.txt: Permission denied
 
 ```terminal
 {
+  "id": "t1",
   "title": "Права папки",
   "task": "Загляни внутрь папки reports в длинном формате: посмотри, какие права у файла внутри и как отличить папку от файла.",
   "setup": {
@@ -97,7 +99,7 @@ cat: secret.txt: Permission denied
     }
   },
   "check": [
-    { "type": "output_contains", "text": "otchet.txt", "message": "файл внутри папки выведен с правами" }
+    { "type": "output_contains", "commands": ["ls"], "text": "otchet.txt", "message": "файл внутри папки выведен с правами" }
   ],
   "solution": ["ls -l reports"],
   "hint": "У папок строка прав начинается с буквы d, а у файлов — с дефиса"
@@ -106,6 +108,7 @@ cat: secret.txt: Permission denied
 
 ```terminal
 {
+  "id": "t2",
   "title": "Скрытое тоже имеет права",
   "task": "В домашней папке лежит скрытый файл .env. Покажи все файлы, включая скрытые, в длинном формате и найди строку с .env.",
   "setup": {
@@ -116,7 +119,7 @@ cat: secret.txt: Permission denied
     }
   },
   "check": [
-    { "type": "output_contains", "text": ".env", "message": "скрытый файл виден вместе со своими правами" }
+    { "type": "output_contains", "commands": ["ls"], "text": ".env", "message": "скрытый файл виден вместе со своими правами" }
   ],
   "solution": ["ls -la"],
   "hint": "Файлы, имя которых начинается с точки, ls показывает только с флагом -a"
@@ -127,6 +130,7 @@ cat: secret.txt: Permission denied
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что означают права 644?",
   "options": ["rw-r--r--", "rwxr-xr-x", "rw-------"],
   "answer": 0,
@@ -136,6 +140,7 @@ cat: secret.txt: Permission denied
 
 ```quiz
 {
+  "id": "q1",
   "question": "Что значит право x у папки?",
   "options": ["Папку можно запустить как программу", "В папку можно войти и обращаться к файлам внутри", "Папку нельзя удалить даже root"],
   "answer": 1,
@@ -145,6 +150,7 @@ cat: secret.txt: Permission denied
 
 ```quiz
 {
+  "id": "q2",
   "question": "У файла права rwxrwxrwx, но ты по-прежнему не можешь открыть его по пути /home/alice/private/secret.txt. Почему?",
   "options": ["Потому что root запретил", "Потому что нет x на папке private по пути", "Потому что файл слишком большой"],
   "answer": 1,

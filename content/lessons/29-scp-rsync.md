@@ -62,12 +62,12 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```terminal
 {
+  "id": "t0",
   "title": "Что отправляем",
   "task": "Посмотри структуру папки проекта: tree site. Заодно проверь, что внутри есть index.html.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "site": { "index.html": "<html>Hello</html>\n", "style.css": "body { color: #333; }\n" }, "backup": {} } },
   "check": [
-    { "type": "output_contains", "text": "index.html", "message": "файл проекта виден в дереве" }
+    { "type": "output_contains", "commands": ["tree", "find"], "text": "index.html", "message": "файл проекта виден в дереве" }
   ],
   "solution": ["tree site"],
   "hint": "tree показывает содержимое папки схемой"
@@ -76,9 +76,9 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```terminal
 {
+  "id": "t1",
   "title": "Рекурсивное копирование",
   "task": "Скопируй папку site в backup рекурсивно: cp -r site backup. Так же работает и scp, только цель — сервер.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "site": { "index.html": "<html>Hello</html>\n", "style.css": "body {}\n" }, "backup": {} } },
   "check": [
     { "type": "path_exists", "path": "/home/user/backup/site", "message": "папка скопирована в backup" }
@@ -90,12 +90,12 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```terminal
 {
+  "id": "t2",
   "title": "Сколько строк уедет",
   "task": "Посчитай строки в файле проекта: wc -l site/index.html. Так прикидывают объём передачи.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "site": { "index.html": "<html>\n<body>Hello</body>\n</html>\n" }, "backup": {} } },
   "check": [
-    { "type": "output_contains", "text": "index.html", "message": "wc вывел число строк и имя файла" }
+    { "type": "output_contains", "commands": ["wc"], "text": "index.html", "message": "wc вывел число строк и имя файла" }
   ],
   "solution": ["wc -l site/index.html"],
   "hint": "wc -l печатает число строк перед именем файла"
@@ -106,6 +106,7 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```quiz
 {
+  "id": "q0",
   "question": "Чем rsync удобнее scp при повторной синхронизации папки?",
   "options": ["Передаёт только изменившееся", "Работает без интернета", "Не требует SSH"],
   "answer": 0,
@@ -115,6 +116,7 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```quiz
 {
+  "id": "q1",
   "question": "Что значит слеш на конце в rsync -avz src/ dst/?",
   "options": ["Скопировать содержимое src, а не саму папку", "Удалить src после копирования", "Сжать данные"],
   "answer": 0,
@@ -124,6 +126,7 @@ rsync -avz dir  user@host:~/dir/    # сама папка dir внутри dir/
 
 ```quiz
 {
+  "id": "q2",
   "question": "Что делает rsync --delete?",
   "options": ["Удаляет в приёмнике файлы, которых нет в источнике", "Удаляет источник после копирования", "Проверяет контрольные суммы"],
   "answer": 0,

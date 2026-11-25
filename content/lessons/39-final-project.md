@@ -26,15 +26,15 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 - `mkdir -p` создаёт всю цепочку папок сразу: `mkdir -p projects/web/assets` не упадёт, даже если `projects` ещё нет.
 - `echo "текст" > file` **перезаписывает** файл, `>>` — дописывает в конец.
 - `kill 412` посылает процессу SIGTERM — вежливую просьбу завершиться. `-9` оставляем на крайний случай.
-- Проверка (кнопка «Проверить») смотрит на последний вывод терминала или на файлы, поэтому команды выполняй по порядку.
+- В этом уроке этапы проверяются автоматически. После модуля тебя ждёт «Аварийная смена» с общей песочницей и самостоятельным порядком действий.
 
 ## Попробуй
 
 ```terminal
 {
+  "id": "t0",
   "title": "Шаг 1. Структура проекта",
   "task": "Создай структуру проекта одной командой: mkdir -p projects/web/assets. Внутри web появится папка assets.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": {} } },
   "check": [
     { "type": "path_is_dir", "path": "/home/user/projects/web/assets", "message": "папка projects/web/assets создана" }
@@ -46,9 +46,9 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t1",
   "title": "Шаг 2. Главная страница",
   "task": "Положи в проект файл: echo \"<html>Final project</html>\" > projects/web/index.html.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "assets": {} } } } },
   "check": [
     { "type": "file_contains", "path": "/home/user/projects/web/index.html", "text": "<html>", "message": "файл index.html создан и содержит HTML" }
@@ -60,12 +60,12 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t2",
   "title": "Шаг 3. Хватит ли места",
   "task": "Проверь заполнение дисков: df -h. Взгляд на процент в столбце Use% — обязательная привычка.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "index.html": "<html>Final project</html>\n" } } } },
   "check": [
-    { "type": "output_contains", "text": "Use%", "message": "таблица разделов видна" }
+    { "type": "output_contains", "commands": ["df"], "text": "Use%", "message": "таблица разделов видна" }
   ],
   "solution": ["df -h"],
   "hint": "df = disk free, -h = человекочитаемые единицы"
@@ -74,12 +74,12 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t3",
   "title": "Шаг 4. Хватит ли памяти",
   "task": "Проверь память и swap: free -h. Смотри на столбец available.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "index.html": "<html>Final project</html>\n" } } } },
   "check": [
-    { "type": "output_contains", "text": "Mem", "message": "строка памяти видна" }
+    { "type": "output_contains", "commands": ["free"], "text": "Mem", "message": "строка памяти видна" }
   ],
   "solution": ["free -h"],
   "hint": "available — реально доступная программам память"
@@ -88,12 +88,12 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t4",
   "title": "Шаг 5. Кто жрёт ресурсы",
   "task": "Посмотри список процессов: ps aux. Найди в нём зависший процесс sleep.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "index.html": "<html>Final project</html>\n" } } } },
   "check": [
-    { "type": "output_contains", "text": "sleep", "message": "зависший sleep найден в списке процессов" }
+    { "type": "output_contains", "commands": ["ps"], "text": "sleep", "message": "зависший sleep найден в списке процессов" }
   ],
   "solution": ["ps aux"],
   "hint": "aux — все процессы всех пользователей"
@@ -102,12 +102,14 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t5",
   "title": "Шаг 6. Убить зависший процесс",
   "task": "Заверши процесс sleep по его PID (412), а затем снова посмотри процессы: kill 412 и ps aux. Остальные должны уцелеть.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "index.html": "<html>Final project</html>\n" } } } },
   "check": [
-    { "type": "output_contains", "text": "firefox", "message": "в новом списке процессов видно, что остальные на месте" }
+    { "type": "process_absent", "pid": 412, "message": "sleep завершён" },
+    { "type": "process_present", "pid": 913, "message": "firefox работает" },
+    { "type": "output_contains", "commands": ["ps"], "text": "firefox", "message": "в новом списке процессов видно, что остальные на месте" }
   ],
   "solution": ["kill 412", "ps aux"],
   "hint": "PID берётся из вывода ps: у sleep он 412. Сначала kill 412, потом ps aux"
@@ -116,12 +118,13 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```terminal
 {
+  "id": "t6",
   "title": "Шаг 7. Заводим лог",
   "task": "Запиши строку в лог и найди её: echo \"final project deployed\" > deploy.log, затем grep deployed deploy.log.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "projects": { "web": { "index.html": "<html>Final project</html>\n" } } } },
   "check": [
-    { "type": "output_contains", "text": "deployed", "message": "в логе нашлась запись о развёртывании" }
+    { "type": "file_contains", "path": "/home/user/deploy.log", "text": "final project deployed", "message": "запись сохранена на диск" },
+    { "type": "output_contains", "commands": ["grep"], "text": "deployed", "message": "в логе нашлась запись о развёртывании" }
   ],
   "solution": ["echo \"final project deployed\" > deploy.log", "grep deployed deploy.log"],
   "hint": "Сначала запиши строку в файл через >, потом поищи слово grep-ом"
@@ -132,6 +135,7 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```quiz
 {
+  "id": "q0",
   "question": "Зачем mkdir нужен ключ -p?",
   "options": ["Создать все промежуточные папки, не падая, если их ещё нет", "Создать папку с паролем", "Удалить папку, если она есть"],
   "answer": 0,
@@ -141,6 +145,7 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```quiz
 {
+  "id": "q1",
   "question": "Чем echo \"текст\" > file отличается от >> file?",
   "options": ["> перезаписывает файл, >> дописывает в конец", "Ничем, это синонимы", "> работает только от root"],
   "answer": 0,
@@ -150,6 +155,7 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```quiz
 {
+  "id": "q2",
   "question": "Как из списка ps узнать, что процесс завис, и что с ним делать?",
   "options": ["Найти его PID и завершить через kill <PID>", "Перезагрузить компьютер сразу", "Удалить файл процесса из /tmp"],
   "answer": 0,
@@ -159,6 +165,7 @@ outcome: "Ты сам, по шагам, разворачиваешь проек�
 
 ```quiz
 {
+  "id": "q3",
   "question": "Диск заполнен, а du показывает меньше. Что ещё стоит проверить?",
   "options": ["df -i (иноды) и удалённые, но открытые файлы", "Пароль пользователя", "Раскладку клавиатуры"],
   "answer": 0,

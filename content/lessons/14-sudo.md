@@ -57,11 +57,12 @@ sudo visudo             # безопасно редактировать файл
 
 ```terminal
 {
+  "id": "t0",
   "title": "Ты — обычный пользователь",
   "task": "Сначала посмотри, кто ты сейчас: обычный аккаунт или уже администратор?",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "user", "message": "видно текущее имя пользователя" }
+    { "type": "output_contains", "commands": ["whoami"], "text": "user", "message": "видно текущее имя пользователя" }
   ],
   "solution": ["whoami"],
   "hint": "Та же команда после sudo вывела бы root — попробуй на своей машине позже"
@@ -70,6 +71,7 @@ sudo visudo             # безопасно редактировать файл
 
 ```terminal
 {
+  "id": "t1",
   "title": "Кому разрешено всё",
   "task": "В файле sudoers.txt лежат строки из /etc/sudoers. Найди строку, которая даёт группе sudo полные права на любые команды.",
   "setup": {
@@ -79,7 +81,7 @@ sudo visudo             # безопасно редактировать файл
     }
   },
   "check": [
-    { "type": "output_contains", "text": "%sudo   ALL=(ALL:ALL) ALL", "message": "найдена строка с правилом для группы sudo" }
+    { "type": "output_contains", "commands": ["grep"], "text": "%sudo   ALL=(ALL:ALL) ALL", "message": "найдена строка с правилом для группы sudo" }
   ],
   "solution": ["grep sudo sudoers.txt"],
   "hint": "Знак % перед именем означает «группа», а не пользователь"
@@ -88,6 +90,7 @@ sudo visudo             # безопасно редактировать файл
 
 ```terminal
 {
+  "id": "t2",
   "title": "Личное исключение",
   "task": "Тот же файл содержит правило, которое разрешает пользователю user запускать apt без пароля. Найди строку с NOPASSWD.",
   "setup": {
@@ -97,7 +100,7 @@ sudo visudo             # безопасно редактировать файл
     }
   },
   "check": [
-    { "type": "output_contains", "text": "NOPASSWD", "message": "найдена строка с разрешением без пароля" }
+    { "type": "output_contains", "commands": ["grep"], "text": "NOPASSWD", "message": "найдена строка с разрешением без пароля" }
   ],
   "solution": ["grep NOPASSWD sudoers.txt"],
   "hint": "grep ищет по образцу в любом месте строки"
@@ -108,6 +111,7 @@ sudo visudo             # безопасно редактировать файл
 
 ```quiz
 {
+  "id": "q0",
   "question": "Чей пароль просит sudo?",
   "options": ["Пароль root", "Пароль текущего пользователя", "Пароль группы wheel"],
   "answer": 1,
@@ -117,6 +121,7 @@ sudo visudo             # безопасно редактировать файл
 
 ```quiz
 {
+  "id": "q1",
   "question": "Ты получил «user is not in the sudoers file». Что это значит?",
   "options": ["Твой аккаунт не имеет права на sudo, нужно попросить администратора добавить тебя в группу", "Ты ввёл неверный пароль", "Система сломана, надо переустановить"],
   "answer": 0,
@@ -126,6 +131,7 @@ sudo visudo             # безопасно редактировать файл
 
 ```quiz
 {
+  "id": "q2",
   "question": "Чем sudo отличается от su - alice?",
   "options": ["Ничем, это синонимы", "sudo повышает права на одну команду, su полностью переключает пользователя", "sudo работает только в Fedora, su — в Ubuntu"],
   "answer": 1,

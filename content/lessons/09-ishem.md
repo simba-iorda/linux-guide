@@ -85,6 +85,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```terminal
 {
+  "id": "t0",
   "title": "Ищем ошибки в логе",
   "task": "В файле app.log найди все строки со словом error.",
   "setup": {
@@ -94,7 +95,7 @@ grep -c "error" app.log     # сколько строк нашлось
     }
   },
   "check": [
-    { "type": "output_contains", "text": "disk full", "message": "ты нашёл строку с ошибкой" }
+    { "type": "output_contains", "commands": ["grep"], "text": "disk full", "message": "ты нашёл строку с ошибкой" }
   ],
   "solution": ["grep \"error\" app.log"],
   "hint": "grep \"error\" app.log покажет все строки со словом error."
@@ -103,6 +104,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```terminal
 {
+  "id": "t1",
   "title": "Регистр не важен",
   "task": "В файле снова есть слово с ошибками в разном регистре: Error и ERROR. Найди обе строки одной командой, не обращая внимания на регистр.",
   "setup": {
@@ -112,8 +114,8 @@ grep -c "error" app.log     # сколько строк нашлось
     }
   },
   "check": [
-    { "type": "output_contains", "text": "no space", "message": "найдена строка с Error" },
-    { "type": "output_contains", "text": "timeout", "message": "найдена строка с ERROR" }
+    { "type": "output_contains", "commands": ["grep"], "text": "no space", "message": "найдена строка с Error" },
+    { "type": "output_contains", "commands": ["grep"], "text": "timeout", "message": "найдена строка с ERROR" }
   ],
   "solution": ["grep -i \"error\" system.log"],
   "hint": "Флаг -i (ignore case) отключает учёт регистра."
@@ -122,6 +124,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```terminal
 {
+  "id": "t2",
   "title": "С номерами строк",
   "task": "Найди строки со словом warn в файле system.log и выведи их вместе с номерами строк.",
   "setup": {
@@ -131,8 +134,8 @@ grep -c "error" app.log     # сколько строк нашлось
     }
   },
   "check": [
-    { "type": "output_contains", "text": "2:", "message": "видна первая строка с номером 2" },
-    { "type": "output_contains", "text": "4:", "message": "видна вторая строка с номером 4" }
+    { "type": "output_contains", "commands": ["grep"], "text": "2:", "message": "видна первая строка с номером 2" },
+    { "type": "output_contains", "commands": ["grep"], "text": "4:", "message": "видна вторая строка с номером 4" }
   ],
   "solution": ["grep -n \"warn\" system.log"],
   "hint": "Флаг -n добавляет номер строки перед каждой найденной строкой."
@@ -141,6 +144,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```terminal
 {
+  "id": "t3",
   "title": "Считаем совпадения",
   "task": "Посчитай, сколько строк со словом error в файле app.log. Нужно только число, а не сами строки.",
   "setup": {
@@ -150,7 +154,7 @@ grep -c "error" app.log     # сколько строк нашлось
     }
   },
   "check": [
-    { "type": "output_contains", "text": "2", "message": "выведено число найденных строк" }
+    { "type": "output_contains", "commands": ["grep"], "text": "2", "message": "выведено число найденных строк" }
   ],
   "solution": ["grep -c \"error\" app.log"],
   "hint": "Флаг -c (count) печатает только количество совпавших строк."
@@ -159,6 +163,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```terminal
 {
+  "id": "t4",
   "title": "Всё, кроме лишнего",
   "task": "В файле есть отладочные строки со словом debug. Выведи все строки БЕЗ слова debug, чтобы остался только полезный текст.",
   "setup": {
@@ -168,7 +173,7 @@ grep -c "error" app.log     # сколько строк нашлось
     }
   },
   "check": [
-    { "type": "output_contains", "text": "ready", "message": "полезная строка info: ready видна" }
+    { "type": "output_contains", "commands": ["grep"], "text": "ready", "message": "полезная строка info: ready видна" }
   ],
   "solution": ["grep -v \"debug\" app.log"],
   "hint": "Флаг -v (invert) показывает всё, что НЕ совпало с шаблоном."
@@ -179,6 +184,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```quiz
 {
+  "id": "q0",
   "question": "Какая команда найдёт все файлы с расширением .log в текущей папке и глубже?",
   "options": [
     "grep \"*.log\" .",
@@ -192,6 +198,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```quiz
 {
+  "id": "q1",
   "question": "Что делает grep -v \"debug\" app.log?",
   "options": [
     "Показывает строки, в которых НЕТ слова debug",
@@ -205,6 +212,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```quiz
 {
+  "id": "q2",
   "question": "Какая команда покажет строки со словом error вместе с их номерами?",
   "options": ["grep -c \"error\" app.log", "grep -n \"error\" app.log", "grep -v \"error\" app.log"],
   "answer": 1,
@@ -214,6 +222,7 @@ grep -c "error" app.log     # сколько строк нашлось
 
 ```quiz
 {
+  "id": "q3",
   "question": "grep \"error\" app.log не вывел ничего и сразу вернул приглашение. Это ошибка?",
   "options": [
     "Да, команда сломалась",

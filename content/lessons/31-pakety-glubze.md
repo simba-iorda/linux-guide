@@ -51,12 +51,12 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```terminal
 {
+  "id": "t0",
   "title": "Какой это дистрибутив",
   "task": "Посмотри поле ID в файле описания системы: grep ^ID= os-release.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "os-release": "NAME=\"Ubuntu\"\nVERSION=\"24.04 LTS\"\nID=ubuntu\nID_LIKE=debian\n" } },
   "check": [
-    { "type": "output_contains", "text": "ubuntu", "message": "дистрибутив определён" }
+    { "type": "output_contains", "commands": ["grep"], "text": "ubuntu", "message": "дистрибутив определён" }
   ],
   "solution": ["grep ^ID= os-release"],
   "hint": "^ — начало строки, чтобы ID_LIKE не попал"
@@ -65,12 +65,12 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```terminal
 {
+  "id": "t1",
   "title": "Полное описание системы",
   "task": "Прочитай файл целиком: cat os-release. Видно имя, версию и родословную (ID_LIKE).",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "os-release": "NAME=\"Ubuntu\"\nVERSION=\"24.04 LTS\"\nID=ubuntu\nID_LIKE=debian\n" } },
   "check": [
-    { "type": "output_contains", "text": "VERSION", "message": "файл прочитан целиком" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "VERSION", "message": "файл прочитан целиком" }
   ],
   "solution": ["cat os-release"],
   "hint": "cat печатает файл без пагинации"
@@ -81,6 +81,7 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```quiz
 {
+  "id": "q0",
   "question": "Зачем запускают apt update перед установкой?",
   "options": ["Обновить списки доступных пакетов из репозиториев", "Сразу обновить все программы", "Очистить кэш загрузок"],
   "answer": 0,
@@ -90,6 +91,7 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```quiz
 {
+  "id": "q1",
   "question": "Как установить пакет nmap в Arch Linux?",
   "options": ["pacman -S nmap", "apt install nmap", "dnf install nmap"],
   "answer": 0,
@@ -99,6 +101,7 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```quiz
 {
+  "id": "q2",
   "question": "Что такое зависимости пакета?",
   "options": ["Другие пакеты и библиотеки, нужные программе для работы", "Файлы настроек в /etc", "Права доступа к программе"],
   "answer": 0,
@@ -108,6 +111,7 @@ outcome: "Ты умеешь ставить, обновлять и удалять
 
 ```quiz
 {
+  "id": "q3",
   "question": "apt пишет Unable to locate package nginx. С чего начать?",
   "options": ["С apt update и проверки имени пакета", "С удаления /etc/apt", "С переустановки ядра"],
   "answer": 0,

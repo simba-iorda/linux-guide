@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Linux за 2 месяца</title>
+  <meta name="description" content="Практический курс Linux и Bash с терминалом в браузере, 40 уроками и итоговыми испытаниями.">
   <link rel="stylesheet" href="assets/vendor/fonts/fonts.css">
   <link rel="stylesheet" href="assets/vendor/fonts/box.css">
   <link rel="stylesheet" href="assets/style.css">
@@ -20,33 +21,62 @@
   </script>
 </head>
 <body>
-  <div class="terminal" id="terminal">
-    <div class="scrollback" id="scrollback" aria-live="polite" aria-atomic="false"></div>
+  <main class="workspace">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Linux за 2 месяца — главная">
+        <span class="brand-icon" aria-hidden="true">&gt;_</span>
+        <span>Linux <span class="brand-secondary">за 2 месяца</span></span>
+      </a>
+      <span class="header-progress" id="header-progress">Загрузка курса…</span>
+      <div class="header-actions">
+        <button type="button" id="map-toggle" aria-controls="course-nav" aria-expanded="false">Курс</button>
+        <button type="button" data-command="песочница">Песочница</button>
+        <button type="button" data-command="помощь" aria-label="Помощь">?</button>
+      </div>
+    </header>
 
-    <form class="prompt-line" id="prompt-form" autocomplete="off">
-      <span class="prompt" id="prompt-display" aria-hidden="true">user@linux:~$ </span>
-      <span class="input-wrap">
-        <input
-          id="command-input"
-          class="command-input"
-          type="text"
-          spellcheck="false"
-          autocapitalize="off"
-          autocomplete="off"
-          aria-label="Команда"
-          autofocus
-        >
-        <span class="input-ghost" id="input-ghost" aria-hidden="true"></span>
-      </span>
-    </form>
-  </div>
+    <nav class="course-nav" id="course-nav" aria-label="Модули и уроки" hidden></nav>
 
-  <div id="onboarding" class="onboarding" hidden>
-    <div class="onboarding-terminal">
-      <pre class="onboarding-screen" id="onboarding-screen"></pre>
-      <button id="onboarding-action" class="onboarding-action" hidden type="button">Погнали</button>
-    </div>
-  </div>
+    <section class="terminal" id="terminal" aria-label="Учебный терминал">
+      <header class="terminal-header">
+        <span id="terminal-mode">Bash</span>
+        <strong id="terminal-title">Песочница</strong>
+        <span id="terminal-status" aria-live="polite"></span>
+      </header>
+      <div class="scrollback" id="scrollback" role="log" tabindex="0" aria-label="Вывод терминала"></div>
+      <div class="active-task" id="active-task" hidden>
+        <span id="active-task-text"></span>
+        <button type="button" id="active-hint" data-command="подсказка">Подсказка</button>
+        <button type="button" id="active-check" data-command="проверить" hidden>Проверить</button>
+        <button type="button" id="active-retry" data-command="заново" hidden>Заново</button>
+        <button type="button" id="active-next" data-command="дальше" hidden>Дальше →</button>
+      </div>
+      <form class="prompt-line" id="prompt-form" autocomplete="off">
+        <span class="prompt" id="prompt-display" aria-hidden="true">user@linux:~$ </span>
+        <input id="command-input" class="command-input" type="text" spellcheck="false"
+          autocapitalize="off" autocomplete="off" enterkeyhint="go" aria-label="Команда Bash">
+        <button type="button" class="key-button" data-key="ArrowUp" aria-label="Предыдущая команда">↑</button>
+        <button type="button" class="key-button" data-key="Tab" aria-label="Дополнить команду">Tab</button>
+        <button type="submit" class="enter-button">Enter</button>
+      </form>
+    </section>
+
+    <section class="welcome" id="onboarding" aria-labelledby="welcome-title" hidden>
+      <div class="welcome-copy">
+        <p class="welcome-tag">Интерактивный курс · Bash</p>
+        <h1 id="welcome-title">Linux<br><em>за 2 месяца</em></h1>
+        <p class="welcome-description">Освой терминал с нуля. Работай с файлами, читай логи и проходи испытания в песочнице прямо в браузере.</p>
+        <div class="welcome-actions">
+          <button type="button" class="primary-button" id="onboarding-action">Начать первый урок <span aria-hidden="true">↗</span></button>
+          <button type="button" class="secondary-button" id="onboarding-practice">Открыть песочницу</button>
+        </div>
+      </div>
+      <div class="welcome-preview" aria-label="Пример команд Bash">
+        <div class="preview-heading"><span></span><span></span><span></span><strong>Bash</strong></div>
+        <div class="preview-code"><div><b>$</b> pwd</div><div class="preview-output">/home/user</div><div><b>$</b> ls</div><div class="preview-output">documents&nbsp;&nbsp; projects</div><div><b>$</b> <span class="cursor" aria-hidden="true"></span></div></div>
+      </div>
+    </section>
+  </main>
 
   <script src="assets/vendor/marked.min.js"></script>
   <script type="module" src="assets/js/app.js"></script>

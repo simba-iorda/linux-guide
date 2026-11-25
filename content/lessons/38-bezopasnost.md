@@ -63,12 +63,12 @@ sudo ufw status verbose
 
 ```terminal
 {
+  "id": "t0",
   "title": "Читаем конфиг SSH",
   "task": "Посмотри настройки SSH-сервера: cat sshd_config.txt. Найди строку PermitRootLogin.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "sshd_config.txt": "# конфиг SSH-сервера\nPort 22\nPermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\nMaxAuthTries 6\n" } },
   "check": [
-    { "type": "output_contains", "text": "PermitRootLogin", "message": "строка про root найдена" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "PermitRootLogin", "message": "строка про root найдена" }
   ],
   "solution": ["cat sshd_config.txt"],
   "hint": "cat выводит файл целиком"
@@ -77,12 +77,12 @@ sudo ufw status verbose
 
 ```terminal
 {
+  "id": "t1",
   "title": "Найди самую опасную строку",
   "task": "Вытащи строку про вход по паролю: grep PasswordAuthentication sshd_config.txt. Если там yes — пароли перебираемы.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "sshd_config.txt": "# конфиг SSH-сервера\nPort 22\nPermitRootLogin yes\nPasswordAuthentication yes\nPubkeyAuthentication yes\nMaxAuthTries 6\n" } },
   "check": [
-    { "type": "output_contains", "text": "PasswordAuthentication", "message": "строка найдена — видно, что вход по паролю включён" }
+    { "type": "output_contains", "commands": ["grep"], "text": "PasswordAuthentication", "message": "строка найдена — видно, что вход по паролю включён" }
   ],
   "solution": ["grep PasswordAuthentication sshd_config.txt"],
   "hint": "grep печатает только строки с указанным словом"
@@ -93,6 +93,7 @@ sudo ufw status verbose
 
 ```quiz
 {
+  "id": "q0",
   "question": "Ты включил ufw на удалённом сервере, не разрешив SSH. Что произойдёт?",
   "options": ["Ты потеряешь доступ к серверу", "Ничего, ufw сам пропустит порт 22", "Сервер выключится"],
   "answer": 0,
@@ -102,6 +103,7 @@ sudo ufw status verbose
 
 ```quiz
 {
+  "id": "q1",
   "question": "Почему вход по ключу надёжнее пароля?",
   "options": ["Ключ ed25519 практически невозможно подобрать перебором", "Ключ короче пароля", "С ключом соединение быстрее"],
   "answer": 0,
@@ -111,6 +113,7 @@ sudo ufw status verbose
 
 ```quiz
 {
+  "id": "q2",
   "question": "Как сделать, чтобы пароль не попал в историю команд?",
   "options": ["Начать команду с пробела при HISTCONTROL=ignorespace", "Запустить команду дважды", "Добавить в конец слово hide"],
   "answer": 0,
@@ -120,6 +123,7 @@ sudo ufw status verbose
 
 ```quiz
 {
+  "id": "q3",
   "question": "Права верные, владелец верный, а доступ всё равно «Permission denied». Что проверить?",
   "options": ["SELinux или AppArmor: ls -Z, ausearch -m avc", "Файловую систему на ошибки", "Свободное место на диске"],
   "answer": 0,

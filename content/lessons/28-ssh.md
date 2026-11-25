@@ -65,12 +65,12 @@ Host prod
 
 ```terminal
 {
+  "id": "t0",
   "title": "Что лежит в .ssh",
   "task": "Посмотри содержимое каталога .ssh, включая скрытые файлы: ls -la .ssh. Обрати внимание на пару id_ed25519 и id_ed25519.pub.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { ".ssh": { "id_ed25519": "-----BEGIN OPENSSH PRIVATE KEY-----\nсекрет-приватный-ключ\n", "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI user@linux\n", "config": "Host prod\n    HostName 203.0.113.10\n    User deploy\n    Port 2222\n    IdentityFile ~/.ssh/prod_ed25519\n", "known_hosts": "203.0.113.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5\n" } } },
   "check": [
-    { "type": "output_contains", "text": "id_ed25519.pub", "message": "видно публичный ключ рядом с приватным" }
+    { "type": "output_contains", "commands": ["ls"], "text": "id_ed25519.pub", "message": "видно публичный ключ рядом с приватным" }
   ],
   "solution": ["ls -la .ssh"],
   "hint": "Каталог скрытый, начинается с точки: ls -la .ssh"
@@ -79,12 +79,12 @@ Host prod
 
 ```terminal
 {
+  "id": "t1",
   "title": "Читаем конфиг хоста",
   "task": "Прочитай файл конфига SSH: cat .ssh/config. Найди строку HostName — адрес сервера.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { ".ssh": { "id_ed25519.pub": "ssh-ed25519 AAAA user@linux\n", "config": "Host prod\n    HostName 203.0.113.10\n    User deploy\n    Port 2222\n    IdentityFile ~/.ssh/prod_ed25519\n" } } },
   "check": [
-    { "type": "output_contains", "text": "HostName", "message": "конфиг прочитан, адрес найден" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "HostName", "message": "конфиг прочитан, адрес найден" }
   ],
   "solution": ["cat .ssh/config"],
   "hint": "cat выводит файл целиком"
@@ -93,12 +93,12 @@ Host prod
 
 ```terminal
 {
+  "id": "t2",
   "title": "Публичный ключ",
   "task": "Выведи публичный ключ, который не страшно показывать и отправлять на сервер: cat .ssh/id_ed25519.pub.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { ".ssh": { "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI user@linux\n", "config": "Host prod\n    HostName 203.0.113.10\n" } } },
   "check": [
-    { "type": "output_contains", "text": "ssh-ed25519", "message": "виден тип ключа — ed25519" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "ssh-ed25519", "message": "виден тип ключа — ed25519" }
   ],
   "solution": ["cat .ssh/id_ed25519.pub"],
   "hint": "У публичного ключа расширение .pub"
@@ -109,6 +109,7 @@ Host prod
 
 ```quiz
 {
+  "id": "q0",
   "question": "Какой файл с ключом можно спокойно показывать и копировать на сервер?",
   "options": ["id_ed25519.pub — публичный", "id_ed25519 — приватный", "Оба нельзя показывать"],
   "answer": 0,
@@ -118,6 +119,7 @@ Host prod
 
 ```quiz
 {
+  "id": "q1",
   "question": "Что делает ssh-copy-id user@host?",
   "options": ["Кладёт твой публичный ключ на сервер в список доверенных", "Копирует файлы по SSH", "Создаёт новый ключ"],
   "answer": 0,
@@ -127,6 +129,7 @@ Host prod
 
 ```quiz
 {
+  "id": "q2",
   "question": "Почему на сервере отключают вход по паролю?",
   "options": ["Пароль можно подобрать перебором, а ключ — нет", "С паролем SSH работает медленнее", "Пароль нельзя ввести удалённо"],
   "answer": 0,
@@ -136,6 +139,7 @@ Host prod
 
 ```quiz
 {
+  "id": "q3",
   "question": "Что случится, если приватному ключу выдать права, доступные всем?",
   "options": ["SSH откажется его использовать — это защита от утечки", "Ничего, права не важны", "Ключ станет публичным"],
   "answer": 0,

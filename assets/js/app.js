@@ -1,504 +1,459 @@
-/**
- * app.js — точка входа v4: один полноэкранный терминал.
- */
 import './simulator.js';
 import { createTerminalUI } from './terminal-ui.js';
 import { createLessonEngine } from './lesson-engine.js';
+import { createChallengeEngine } from './challenge-engine.js';
+import { challenges } from '../../content/challenges/index.js';
+import { applyTheme, getStoredTheme, isValidTheme, listThemeLabels } from './theme.js';
 import {
-  applyTheme, getStoredTheme, isValidTheme, listThemeLabels
-} from './theme.js';
-import {
-  onChange, resetProgress, isLessonDoneExported,
-  setLastLessonIndex, getLastLessonIndex,
-  setCurrentLesson, getCurrentLesson, setScrollPosition, getScrollPosition
+  resetProgress, isLessonDone, getChallengeProgress, getLocation, setLocation,
+  getLegacyModule, setLegacyModule
 } from './progress.js';
 
 const Simulator = globalThis.TerminalSimulator;
 const ONBOARDED_KEY = 'linux-tutorial-onboarded';
-
-const terminal = document.getElementById('terminal');
 const onboarding = document.getElementById('onboarding');
-const onboardingScreen = document.getElementById('onboarding-screen');
-const onboardingAction = document.getElementById('onboarding-action');
+const terminal = document.getElementById('terminal');
+const nav = document.getElementById('course-nav');
+const mapToggle = document.getElementById('map-toggle');
+const activeTask = document.getElementById('active-task');
+const activeTaskText = document.getElementById('active-task-text');
+const activeHint = document.getElementById('active-hint');
+const activeCheck = document.getElementById('active-check');
+const activeRetry = document.getElementById('active-retry');
+const activeNext = document.getElementById('active-next');
+const terminalMode = document.getElementById('terminal-mode');
+const terminalTitle = document.getElementById('terminal-title');
+const terminalStatus = document.getElementById('terminal-status');
+const headerProgress = document.getElementById('header-progress');
 
 let manifest = { modules: [], lessons: [] };
-let currentLessonIndex = null;
-let freeSession = Simulator.createSession({});
-let userShell = 'bash';
-let pendingReset = false;
+let view = { type: 'free' };
+let freeSession = Simulator.createSession({ tree: { documents: {}, projects: {} } });
+let loading = null;
+let ready = false;
+let resetPending = false;
+const expandedModules = new Set();
 
 applyTheme(getStoredTheme());
 
 const ui = createTerminalUI({
   onSubmit: handleCommand,
-  getAutocompleteSession: () => {
-    if (engine.currentState() === 'terminal') return engine.getCurrentSession();
-    return freeSession;
-  }
+  onClear: clear,
+  getAutocompleteSession: () => view.type === 'challenge'
+    ? challengeEngine.session() : engine.getCurrentSession() || (engine.currentState() === 'quiz' ? null : freeSession)
 });
 
 const engine = createLessonEngine({
   ui,
-  getUserShell: () => userShell,
-  onDone: (lessonId) => {
-    // Урок завершён — ничего дополнительного, движок уже напечатал.
+  onDone: () => refresh(),
+  onActivity: refresh
+});
+
+const challengeEngine = createChallengeEngine({
+  ui,
+  onChange: refresh,
+  onPass: () => ui.appendComment(view.module < challenges.length
+    ? 'Следующий модуль открыт. Введи «дальше».'
+    : 'Это последнее испытание курса. Все пройденные испытания видны в карте.')
+});
+
+function lessonIndex(lessonId) {
+  return manifest.lessons.findIndex(lesson => lesson.id === lessonId);
+}
+
+function moduleIndex(module) {
+  return manifest.lessons.findIndex(lesson => lesson.module === module);
+}
+
+function currentModule() {
+  if (view.type === 'challenge') return view.module;
+  if (view.type === 'lesson') return manifest.lessons[view.index].module;
+  return 1;
+}
+
+function isPassed(module) {
+  return getChallengeProgress(challenges[module - 1].id).passed;
+}
+
+function prerequisite(module) {
+  for (let previous = Math.max(1, getLegacyModule()); previous < module; previous++) {
+    if (!isPassed(previous)) return previous;
   }
-});
-
-onChange(() => {
-  // Прогресс изменился извне — можно обновить что-то, если нужно.
-});
-
-// Сохраняем позицию прокрутки с небольшим дебаунсом.
-let scrollSaveTimer = null;
-ui.onScroll((y) => {
-  clearTimeout(scrollSaveTimer);
-  scrollSaveTimer = setTimeout(() => setScrollPosition(y), 200);
-});
-window.addEventListener('beforeunload', () => {
-  setScrollPosition(ui.getScrollTop());
-});
-
-/* ---------- алиасы курсовых команд ---------- */
-const COMMAND_ALIASES = {
-  help: 'помощь',
-  хелп: 'помощь',
-  next: 'дальше',
-  back: 'назад',
-  map: 'курс',
-  course: 'курс',
-  lesson: 'урок',
-  theme: 'тема',
-  reset: 'сброс',
-  hint: 'подсказка',
-  solution: 'решение',
-  clear: 'clear',
-  очистить: 'очистить',
-  shell: 'shell'
-};
-
-// Глобальные команды, которые не должны «съедать» активную задачу/квиз.
-const GLOBAL_COMMANDS = new Set([
-  'помощь', 'курс', 'урок', 'дальше', 'назад',
-  'тема', 'shell', 'сброс', 'clear', 'очистить'
-]);
-
-// Команды, которые есть и в симуляторе (некоторые глобальные, например help/clear,
-// должны при необходимости выполняться и как шаг задачи).
-const SIMULATOR_COMMANDS = new Set([
-  'pwd', 'whoami', 'date', 'clear', 'help', 'history', 'uname', 'df', 'free',
-  'ps', 'kill', 'ping', 'curl', 'man', 'ls', 'tree', 'cd', 'cat', 'head', 'tail',
-  'touch', 'mkdir', 'cp', 'mv', 'rm', 'echo', 'grep', 'wc'
-]);
-
-function normalizeCommandWord(word) {
-  return COMMAND_ALIASES[word.toLowerCase()] || word.toLowerCase();
+  return null;
 }
 
-function getCommandName(cmd) {
-  return normalizeCommandWord(cmd.split(/\s+/)[0]);
+function titleOfView() {
+  if (view.type === 'lesson') return manifest.lessons[view.index].title;
+  if (view.type === 'challenge') return challenges[view.module - 1].title;
+  return 'Свободная песочница';
 }
 
-function isCourseGlobalCommand(cmd) {
-  return GLOBAL_COMMANDS.has(getCommandName(cmd));
+function refresh() {
+  const lessonsDone = manifest.lessons.filter(lesson => isLessonDone(lesson.id)).length;
+  const challengesDone = challenges.filter(challenge => getChallengeProgress(challenge.id).passed).length;
+  headerProgress.textContent = `${lessonsDone}/${manifest.lessons.length} уроков · ${challengesDone}/${challenges.length} испытаний`;
+  terminalTitle.textContent = titleOfView();
+  terminalMode.textContent = { lesson: 'Bash', challenge: 'Испытание', free: 'Bash' }[view.type];
+  terminal.dataset.mode = view.type;
+  const activity = engine.activity();
+  const challengeState = challengeEngine.state();
+  const lessonDone = view.type === 'lesson' && engine.currentState() === 'idle';
+  activeTask.hidden = !activity && !challengeState && !lessonDone;
+  activeRetry.hidden = challengeState?.phase !== 'failed';
+  activeNext.hidden = challengeState?.phase !== 'passed' && !lessonDone;
+  activeCheck.hidden = challengeState?.phase !== 'playing';
+  activeHint.hidden = challengeState ? challengeState.phase !== 'playing' : engine.currentState() !== 'terminal';
+  activeTaskText.textContent = challengeState
+    ? (challengeState.phase === 'playing'
+      ? `Попытка ${challengeState.number} · подсказок: ${challengeState.hintsLeft}`
+      : challengeState.phase === 'passed' ? 'Испытание пройдено' : 'Попытка завершена · заново')
+    : activity || (lessonDone ? 'Урок завершён' : '');
+  terminalStatus.textContent = view.type === 'lesson'
+    ? `Урок ${view.index + 1}` : view.type === 'challenge' ? `Модуль ${view.module}` : '';
+  if (!nav.hidden) renderCourseNav();
 }
 
-function isSimulatorCommand(cmd) {
-  return SIMULATOR_COMMANDS.has(cmd.split(/\s+/)[0].toLowerCase());
-}
-
-function setTitle(title) {
-  document.title = (title ? title + ' — ' : '') + 'Linux за 2 месяца';
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function lessonNumberById(id) {
-  const idx = manifest.lessons.findIndex(l => l.id === id);
-  return idx >= 0 ? idx + 1 : null;
-}
-
-function lessonByNumber(num) {
-  const idx = (parseInt(num, 10) || 0) - 1;
-  return manifest.lessons[idx];
-}
-
-function bar(done, total) {
-  const w = 10;
-  const filled = total ? Math.round((done / total) * w) : 0;
-  return '#'.repeat(filled) + '-'.repeat(w - filled);
-}
-
-function moduleLessons(moduleNum) {
-  return manifest.lessons.filter(l => l.module === moduleNum);
-}
-
-function print(text, className = 'output') {
-  ui.appendLine(text, className);
-}
-
-function printLines(text, className = 'output') {
-  ui.appendLines(text, className);
-}
-
-function printCourseMap() {
-  const totalDone = manifest.lessons.filter(l => isLessonDoneExported(l.id)).length;
-  const total = manifest.lessons.length || 40;
-  print('/курс/');
-  manifest.modules.forEach((mod, modIdx) => {
-    const lessons = moduleLessons(mod.num);
-    const done = lessons.filter(l => isLessonDoneExported(l.id)).length;
-    const isLastModule = modIdx === manifest.modules.length - 1;
-    const modPrefix = isLastModule ? '└── ' : '├── ';
-    const childPrefix = isLastModule ? '    ' : '│   ';
-    const doneMark = done === lessons.length && lessons.length > 0 ? ' ✓' : '';
-    print(`${modPrefix}M${mod.num}_${mod.title.replace(/\s+/g, '_')}${doneMark}`);
-    lessons.forEach((l, lIdx) => {
-      const isLastLesson = lIdx === lessons.length - 1;
-      const lessonPrefix = isLastLesson ? '└── ' : '├── ';
-      const lessonDone = isLessonDoneExported(l.id) ? ' ✓' : '';
-      print(`${childPrefix}${lessonPrefix}${l.id}${lessonDone}`);
+function renderCourseNav() {
+  const focused = nav.contains(document.activeElement) ? document.activeElement?.dataset.route : null;
+  const content = document.createDocumentFragment();
+  for (const mod of manifest.modules) {
+    const details = document.createElement('details');
+    details.open = expandedModules.has(mod.num);
+    details.addEventListener('toggle', () => {
+      if (details.open) expandedModules.add(mod.num);
+      else expandedModules.delete(mod.num);
     });
+    const summary = document.createElement('summary');
+    summary.textContent = `${String(mod.num).padStart(2, '0')}  ${mod.title}`;
+    details.append(summary);
+    const lessons = manifest.lessons.filter(lesson => lesson.module === mod.num);
+    for (const lesson of lessons) {
+      const index = lessonIndex(lesson.id);
+      const label = `${String(index + 1).padStart(2, '0')}  ${lesson.title}`;
+      const button = navButton(label, `урок ${index + 1}`, isLessonDone(lesson.id), view.type === 'lesson' && view.index === index);
+      details.append(button);
+    }
+    const def = challenges[mod.num - 1];
+    const gate = navButton(def.title, `испытание ${mod.num}`, isPassed(mod.num), view.type === 'challenge' && view.module === mod.num);
+    gate.classList.add('nav-challenge');
+    details.append(gate);
+    content.append(details);
+  }
+  nav.replaceChildren(content);
+  if (focused) Array.from(nav.querySelectorAll('button')).find(button => button.dataset.route === focused)?.focus();
+}
+
+function navButton(label, route, done, current) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.route = route;
+  button.textContent = `${done ? '✓ ' : ''}${label}`;
+  if (current) button.setAttribute('aria-current', 'page');
+  button.addEventListener('click', () => {
+    if (matchMedia('(max-width: 760px)').matches) showMap(false);
+    handleCommand(route);
   });
-  print('');
-  print(`# Прогресс: [${bar(totalDone, total)}] ${totalDone}/${total}`);
+  return button;
+}
+
+function showMap(show) {
+  nav.hidden = !show;
+  mapToggle.setAttribute('aria-expanded', String(show));
+  if (show) {
+    expandedModules.add(currentModule());
+    renderCourseNav();
+    nav.querySelector('details[open] summary')?.focus();
+  }
+}
+
+function showTerminal() {
+  onboarding.hidden = true;
+  terminal.hidden = false;
+  try { localStorage.setItem(ONBOARDED_KEY, '1'); } catch {
+    // Optional storage.
+  }
+}
+
+function setAddress(fragment) {
+  history.replaceState(null, '', location.pathname + location.search + fragment);
+}
+
+function saveView(locationData, fragment) {
+  setLocation(locationData);
+  setAddress(fragment);
+  document.title = `${titleOfView()} — Linux за 2 месяца`;
+}
+
+function cancelLoad() {
+  loading?.abort();
+  loading = null;
+  ui.setEnabled(true);
+}
+
+async function loadLessonByIndex(index, { allowResume = false } = {}) {
+  const lesson = manifest.lessons[index];
+  if (!lesson) { ui.appendError('Такого урока нет.'); return; }
+  const gate = allowResume ? null : prerequisite(lesson.module);
+  if (gate) {
+    openChallenge(gate, { allowResume: true });
+    ui.appendComment(`Чтобы открыть модуль ${lesson.module}, сначала пройди это испытание.`);
+    return;
+  }
+  cancelLoad();
+  const request = new AbortController();
+  loading = request;
+  ui.setEnabled(false);
+  showTerminal();
+  terminalStatus.textContent = 'Загрузка…';
+  try {
+    const response = await fetch(`content/lessons/${lesson.id}.md`, { signal: request.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const markdown = await response.text();
+    if (loading !== request) return;
+    challengeEngine.stop();
+    view = { type: 'lesson', index };
+    expandedModules.add(lesson.module);
+    ui.clearScrollback();
+    ui.setScrollTop(0);
+    ui.setAutoScroll(false);
+    ui.setPrompt('/home/user');
+    engine.start(lesson.id, markdown);
+    ui.setScrollTop(0);
+    ui.setAutoScroll(true);
+    saveView({ type: 'lesson', id: lesson.id }, `#урок-${index + 1}`);
+  } catch (err) {
+    if (loading === request) {
+      refresh();
+      ui.appendError(`Не удалось загрузить урок ${index + 1}. Повтори «урок ${index + 1}» (${err.message}).`);
+    }
+  } finally {
+    if (loading === request) {
+      loading = null;
+      ui.setAutoScroll(true);
+      ui.setEnabled(true);
+      ui.focus();
+    }
+  }
+}
+
+function openChallenge(module, { allowResume = false } = {}) {
+  if (!challenges[module - 1]) { ui.appendError('Такого испытания нет.'); return; }
+  const gate = allowResume ? null : prerequisite(module);
+  if (gate) {
+    openChallenge(gate, { allowResume: true });
+    ui.appendComment(`Чтобы открыть испытание ${module}, сначала пройди это испытание.`);
+    return;
+  }
+  cancelLoad();
+  showTerminal();
+  engine.reset();
+  view = { type: 'challenge', module };
+  expandedModules.add(module);
+  ui.clearScrollback();
+  challengeEngine.start(challenges[module - 1]);
+  saveView({ type: 'challenge', id: challenges[module - 1].id }, `#испытание-${module}`);
+  ui.focus();
+}
+
+function openFree() {
+  cancelLoad();
+  showTerminal();
+  engine.reset();
+  challengeEngine.stop();
+  view = { type: 'free' };
+  ui.clearScrollback();
+  ui.setPrompt(freeSession.cwd);
+  ui.appendLine('Песочница Bash', 'challenge-title');
+  ui.appendLine('Попробуй pwd и ls. Чтобы вернуться в курс, введи «продолжить».');
+  setAddress('');
+  document.title = 'Песочница — Linux за 2 месяца';
+  refresh();
+  ui.focus();
+}
+
+function resume() {
+  const saved = getLocation();
+  if (saved?.type === 'challenge') {
+    const index = challenges.findIndex(challenge => challenge.id === saved.id);
+    if (index >= 0) { openChallenge(index + 1, { allowResume: true }); return; }
+  }
+  const index = saved?.id ? lessonIndex(saved.id) : saved?.legacyIndex;
+  if (Number.isInteger(index) && manifest.lessons[index]) {
+    if (saved.legacyIndex !== undefined) setLegacyModule(manifest.lessons[index].module);
+    return loadLessonByIndex(index, { allowResume: true });
+  }
+  return loadLessonByIndex(0);
+}
+
+function moveNext() {
+  if (view.type === 'free') { resume(); return; }
+  if (view.type === 'challenge') {
+    if (challengeEngine.state().phase !== 'passed' && !isPassed(view.module)) {
+      ui.appendComment('Заверши испытание и введи «проверить», чтобы открыть следующий модуль.');
+      return;
+    }
+    if (view.module === challenges.length) {
+      ui.appendSuccess('Последнее испытание пройдено. Курс завершён.');
+      return;
+    }
+    loadLessonByIndex(moduleIndex(view.module + 1));
+    return;
+  }
+  const next = manifest.lessons[view.index + 1];
+  if (next?.module === currentModule()) loadLessonByIndex(view.index + 1);
+  else openChallenge(currentModule());
+}
+
+function moveBack() {
+  if (view.type === 'challenge') {
+    const index = manifest.lessons.findLastIndex(lesson => lesson.module === view.module);
+    loadLessonByIndex(index, { allowResume: true });
+  } else if (view.type === 'lesson' && view.index > 0) {
+    loadLessonByIndex(view.index - 1, { allowResume: true });
+  } else ui.appendComment('Ты в начале курса.');
 }
 
 function printHelp() {
-  print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
-  print('');
-  print('Доступные команды:');
-  print('  помощь / help, хелп       — этот список');
-  print('  курс / map, course        — карта курса с прогрессом');
-  print('  урок / lesson <номер>     — открыть урок (1–' + (manifest.lessons.length || 40) + ')');
-  print('  дальше / next             — следующий урок');
-  print('  назад / back              — предыдущий урок');
-  print('  тема / theme список       — список тем');
-  print('  тема / theme <имя>        — сменить тему');
-  print('  shell bash|fish|zsh       — переключить оболочку');
-  print('  сброс / reset             — сбросить прогресс');
-  print('  clear, очистить           — очистить терминал');
-  print('  подсказка / hint          — подсказка к активной задаче');
-  print('  решение / solution        — показать решение активной задачи');
-  print('Контент курса — MIT · оригинал шпаргалки: github.com/justxor/Linux-', 'comment');
+  ui.appendLine('Навигация по курсу', 'challenge-title');
+  ui.appendLines([
+    'курс                         карта модулей',
+    'урок N · дальше · назад       навигация',
+    'испытание N                  проверка после модуля',
+    'подсказка · задание           помощь с текущей задачей',
+    'проверить · заново            проверка и повтор попытки',
+    'песочница · продолжить        свободная практика и возврат',
+    'справочник [запрос]           поиск по шпаргалке',
+    'тема список · тема ИМЯ        оформление',
+    'clear · сброс                очистить вывод или сбросить прогресс'
+  ].join('\n'));
 }
 
-function applyShell(shell) {
-  if (!['bash', 'fish', 'zsh'].includes(shell)) {
-    print(`shell: неизвестный режим «${shell}». Доступны: bash, fish, zsh.`, 'error');
-    return;
-  }
-  userShell = shell;
-  freeSession.shell = shell;
-  engine.setTaskShell(shell);
-  if (engine.currentState() !== 'terminal') {
-    ui.setPrompt(shell, freeSession.cwd);
-  }
-  print(`Режим оболочки: ${shell}`);
-}
-
-function applyThemeByName(name) {
-  if (name === 'список') {
-    print('Доступные темы:');
-    listThemeLabels().forEach(l => print('  ' + l));
-    return;
-  }
-  if (!isValidTheme(name)) {
-    print(`тема: неизвестная тема «${name}». Набери «тема список».`, 'error');
-    return;
-  }
-  const theme = applyTheme(name);
-  print(`Тема установлена: ${theme.label}`);
-}
-
-function runFreeShellCommand(raw) {
-  const line = raw.trim();
-  if (!line) return;
-  ui.appendCommandLine(line);
-  const result = Simulator.exec(freeSession, line);
-  if (result.clear) {
-    ui.clearScrollback();
-  } else if (result.stdout) {
-    if (result.exit !== 0 && /command not found/.test(String(result.stdout || ''))) {
-      print(`bash: ${line.split(/\s+/)[0]}: команда не найдена`, 'error');
-      print('набери помощь', 'comment');
-    } else {
-      printLines(result.stdout, 'output');
+async function printReference(query) {
+  const requestView = view;
+  try {
+    const response = await fetch('content/cheatsheet.md');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const markdown = await response.text();
+    if (view !== requestView) return;
+    if (!query) {
+      ui.appendLine('Справочник по Linux', 'challenge-title');
+      ui.appendComment('Для поиска введи «справочник grep» или «справочник права».');
+      return;
     }
-  }
-  ui.setPrompt(freeSession.shell, freeSession.cwd);
-}
-
-async function loadLessonByIndex(idx) {
-  if (idx < 0 || idx >= manifest.lessons.length) {
-    print('Такого урока нет.', 'error');
-    return;
-  }
-  currentLessonIndex = idx;
-  setLastLessonIndex(idx);
-  setCurrentLesson(idx);
-  const lesson = manifest.lessons[idx];
-  setTitle(lesson.title);
-
-  if (ui.appendLine) {
-    // Новый урок всегда начинается сверху экрана.
-    ui.setAutoScroll(false);
-    const anchor = ui.appendAnchor();
-    const hasContent = terminal.querySelector('.scrollback').childElementCount > 1;
-    if (hasContent) print('────────────────────────────', 'comment');
-    ui.appendCommandLine(`cat уроки/${lesson.id}.md`);
-
-    try {
-      const res = await fetch(`content/lessons/${lesson.id}.md`);
-      if (!res.ok) {
-        print(`урок ${idx + 1}: не удалось загрузить (${res.status})`, 'error');
-        ui.setAutoScroll(true);
-        return;
-      }
-      const md = await res.text();
-      engine.start(lesson.id, md);
-      ui.scrollToElement(anchor);
-      ui.setAutoScroll(true);
-    } catch (e) {
-      print(`урок ${idx + 1}: ${e.message}`, 'error');
-      ui.setAutoScroll(true);
-    }
+    const matches = markdown.split('\n').filter(line => line.toLowerCase().includes(query.toLowerCase()));
+    ui.appendLines(matches.slice(0, 20).join('\n') || 'Совпадений нет.');
+  } catch (err) {
+    if (view === requestView) ui.appendError(`Не удалось открыть справочник (${err.message}).`);
   }
 }
 
-function restoreTaskPrompt() {
-  if (engine.currentState() === 'terminal') {
-    const session = engine.getCurrentSession();
-    if (session) ui.setPrompt(session.shell, session.cwd);
-  }
-}
-
-function handleMeta(cmd) {
-  const parts = cmd.split(/\s+/);
-  const name = getCommandName(cmd);
-  const arg = parts[1] || '';
-  const rest = parts.slice(1).join(' ');
-
-  if (name === 'помощь') {
-    printHelp();
-    return true;
-  }
-
-  if (name === 'курс') {
-    printCourseMap();
-    return true;
-  }
-
-  if (name === 'урок') {
-    if (!arg) {
-      print('набери: урок <номер>', 'error');
-    } else {
-      const lesson = lessonByNumber(arg);
-      if (lesson) loadLessonByIndex(manifest.lessons.indexOf(lesson));
-      else print(`урок ${escapeHtml(arg)}: такого урока нет.`, 'error');
-    }
-    return true;
-  }
-
-  if (name === 'дальше') {
-    const start = currentLessonIndex !== null ? currentLessonIndex + 1 : (getLastLessonIndex() || 0);
-    if (start >= manifest.lessons.length) {
-      print('Это был последний урок. Ты дошёл до конца курса!', 'success');
-    } else {
-      loadLessonByIndex(start);
-    }
-    return true;
-  }
-
-  if (name === 'назад') {
-    const start = currentLessonIndex !== null ? currentLessonIndex - 1 : (getLastLessonIndex() || 0) - 1;
-    if (start < 0) {
-      print('Это самое начало курса.', 'warn');
-    } else {
-      loadLessonByIndex(start);
-    }
-    return true;
-  }
-
-  if (name === 'тема') {
-    applyThemeByName(arg.toLowerCase());
-    return true;
-  }
-
-  if (name === 'shell') {
-    applyShell(arg.toLowerCase());
-    return true;
-  }
-
-  if (name === 'сброс') {
-    if (pendingReset) {
-      resetProgress();
-      currentLessonIndex = null;
-      engine.reset();
-      freeSession = Simulator.createSession({});
-      userShell = 'bash';
-      ui.clearScrollback();
-      ui.setPrompt('bash', '/home/user');
-      print('Прогресс сброшен. Набери помощь.', 'success');
-      pendingReset = false;
-    } else {
-      print('Точно? Набери сброс ещё раз.', 'warn');
-      pendingReset = true;
-    }
-    return true;
-  }
-
-  if (name === 'clear' || name === 'очистить') {
-    ui.clearScrollback();
-    return true;
-  }
-
-  return false;
+function clear() {
+  ui.clearScrollback();
+  if (view.type === 'challenge') challengeEngine.describe();
+  else engine.restoreActive({ clearOutput: true });
 }
 
 function handleCommand(raw) {
-  pendingReset = false;
-  const trimmed = raw.trim();
-  if (!trimmed) return;
-
-  const activeLesson = engine.isActive() && engine.currentState() !== 'idle';
-
-  // Глобальные команды внутри активного урока: выполняем своё дело,
-  // но не выталкиваем пользователя из текущей задачи/квиза.
-  if (activeLesson && isCourseGlobalCommand(trimmed)) {
-    handleMeta(trimmed);
-    if (engine.isActive() && engine.currentState() !== 'idle') {
-      restoreTaskPrompt();
-      // Если команда одновременно есть в симуляторе (например, help),
-      // пропускаем её через движок, чтобы задача могла засчитаться.
-      if (engine.currentState() === 'terminal' && isSimulatorCommand(trimmed)) {
-        engine.handleInput(trimmed);
-      }
+  if (!ready) return;
+  const line = raw.trim();
+  if (!line) return;
+  const [word, ...args] = line.split(/\s+/);
+  const command = word.toLowerCase();
+  const argument = args.join(' ');
+  const globalCommand = {
+    next: 'дальше', back: 'назад', lesson: 'урок', map: 'курс', course: 'курс',
+    challenge: 'испытание', practice: 'песочница', theme: 'тема', reset: 'сброс', resume: 'продолжить'
+  };
+  const name = Object.hasOwn(globalCommand, command) ? globalCommand[command] : command;
+  if (name !== 'сброс') resetPending = false;
+  if (name === 'курс') { showMap(nav.hidden); return; }
+  if (name === 'помощь' || (name === 'help' && view.type === 'free')) {
+    if (!onboarding.hidden) openFree();
+    printHelp();
+  }
+  else if (name === 'дальше') moveNext();
+  else if (name === 'назад') moveBack();
+  else if (name === 'урок' && /^\d+$/.test(argument)) loadLessonByIndex(Number(argument) - 1);
+  else if (name === 'испытание') {
+    if (!argument || /^\d+$/.test(argument)) openChallenge(argument ? Number(argument) : currentModule());
+    else ui.appendError('Введи «испытание N», где N — номер модуля.');
+  } else if (name === 'песочница') openFree();
+  else if (name === 'продолжить') resume();
+  else if (name === 'справочник') printReference(argument);
+  else if (name === 'clear' || name === 'очистить') clear();
+  else if (name === 'тема') {
+    if (!argument || argument === 'список') ui.appendLines(listThemeLabels().join('\n'));
+    else if (isValidTheme(argument.toLowerCase())) ui.appendSuccess(`Тема: ${applyTheme(argument.toLowerCase()).label}`);
+    else ui.appendError('Неизвестная тема. Введи «тема список».');
+  } else if (name === 'сброс') {
+    if (resetPending && ['подтвердить', 'confirm'].includes(argument)) {
+      resetProgress();
+      resetPending = false;
+      freeSession = Simulator.createSession({ tree: { documents: {}, projects: {} } });
+      openFree();
+      ui.appendSuccess('Прогресс сброшен. Введи «урок 1», чтобы начать.');
+    } else {
+      resetPending = true;
+      ui.appendLine('Чтобы стереть прогресс и попытки, введи «сброс подтвердить».', 'warn');
     }
-    ui.focus();
-    return;
+  } else if (view.type === 'challenge') challengeEngine.handleInput(line);
+  else if (name === 'задание' && engine.activity()) ui.appendLine(engine.activity(), 'comment');
+  else if (engine.currentState() !== 'idle') engine.handleInput(line);
+  else {
+    ui.setPrompt(freeSession.cwd);
+    ui.appendCommandLine(line);
+    const result = Simulator.exec(freeSession, line);
+    if (result.stdout) ui.appendLines(result.stdout);
+    if (result.stderr) ui.appendLines(result.stderr, 'error');
+    ui.setPrompt(freeSession.cwd);
   }
-
-  // Если урок активен и ожидает ввода, отдаём движку.
-  if (activeLesson) {
-    engine.handleInput(trimmed);
-    ui.focus();
-    return;
-  }
-
-  // Свободный режим: мета-команды или симулятор.
-  if (handleMeta(trimmed)) {
-    ui.focus();
-    return;
-  }
-
-  runFreeShellCommand(trimmed);
-  ui.focus();
+  if (!loading) ui.focus();
 }
 
-/* ---------- onboarding ---------- */
-function maybeShowOnboarding() {
-  try {
-    if (localStorage.getItem(ONBOARDED_KEY)) return false;
-  } catch (e) { return false; }
-  if (!onboarding) return false;
-  onboarding.hidden = false;
-  onboardingAction.hidden = true;
-  runLoginSequence();
-  return true;
-}
-
-function runLoginSequence() {
-  const lines = [
-    'login: user',
-    'password:',
-    '',
-    'Welcome to Linux Tutorial 2.0 (tty1)',
-    '',
-    'Ты в песочнице. Сломать ничего нельзя.',
-    'Это терминал-имитатор: пробуй команды, ошибайся и учись.',
-    'Курс рассчитан на 2 месяца по 30 минут в день.',
-    ''
-  ];
-  let i = 0;
-  onboardingScreen.textContent = '';
-  function next() {
-    if (i >= lines.length) {
-      onboardingAction.hidden = false;
-      onboardingAction.focus();
-      return;
-    }
-    onboardingScreen.textContent += lines[i] + '\n';
-    i++;
-    setTimeout(next, 220);
+function openAddress() {
+  let fragment;
+  try { fragment = decodeURIComponent(location.hash.slice(1)); } catch { return false; }
+  const match = /^(урок|lesson|испытание|challenge)-(\d+)$/.exec(fragment);
+  if (!match) return false;
+  const number = Number(match[2]);
+  if (['урок', 'lesson'].includes(match[1]) && manifest.lessons[number - 1]) {
+    loadLessonByIndex(number - 1);
+    return true;
   }
-  next();
-}
-
-function hideOnboarding() {
-  if (!onboarding) return;
-  onboarding.hidden = true;
-  try { localStorage.setItem(ONBOARDED_KEY, '1'); } catch (e) {}
-}
-
-function printWelcomeBack() {
-  print('Welcome back to Linux Tutorial 2.0');
-  print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
-  const lastIdx = getLastLessonIndex();
-  if (lastIdx !== null && manifest.lessons[lastIdx]) {
-    const num = lastIdx + 1;
-    print(`Продолжаем урок ${num} — набери урок ${num} или дальше.`);
-  } else {
-    print('Набери помощь, чтобы увидеть команды, или урок 1, чтобы начать.');
+  if (['испытание', 'challenge'].includes(match[1]) && challenges[number - 1]) {
+    openChallenge(number);
+    return true;
   }
+  return false;
 }
 
-/* ---------- инициализация ---------- */
 async function init() {
-  ui.setPrompt('bash', '/home/user');
-
   try {
-    const res = await fetch('content/lessons/manifest.json');
-    if (!res.ok) throw new Error(`manifest ${res.status}`);
-    manifest = await res.json();
-    setTitle('');
-
-    if (!maybeShowOnboarding()) {
-      printWelcomeBack();
-      const savedLesson = getCurrentLesson();
-      if (savedLesson !== null && manifest.lessons[savedLesson]) {
-        await loadLessonByIndex(savedLesson);
-        const savedY = getScrollPosition();
-        if (savedY !== null) {
-          const maxY = ui.getScrollHeight() - ui.getClientHeight();
-          ui.setScrollTop(Math.max(0, Math.min(savedY, maxY)));
-        }
-      }
+    const response = await fetch('content/lessons/manifest.json');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    manifest = await response.json();
+    ready = true;
+    refresh();
+    if (openAddress()) return;
+    if (getLocation()) { await resume(); return; }
+    let onboarded;
+    try { onboarded = localStorage.getItem(ONBOARDED_KEY); } catch { onboarded = false; }
+    if (onboarded) openFree();
+    else {
+      terminal.hidden = true;
+      onboarding.hidden = false;
     }
-  } catch (e) {
-    setTitle('Ошибка');
-    print('Не удалось загрузить учебник: ' + e.message, 'error');
-    print('Проверь, что сервер запущен (./start.sh или python3 -m http.server 8000).', 'error');
+  } catch (err) {
+    terminal.hidden = false;
+    ui.appendError(`Курс не загрузился (${err.message}). Обнови страницу.`);
   }
-
-  ui.focus();
 }
 
-if (onboardingAction) {
-  onboardingAction.addEventListener('click', () => {
-    hideOnboarding();
-    print('Welcome to Linux Tutorial 2.0');
-    print('Linux — это терминал. Здесь ты управляешь всем сам: быстро, минималистично, настраивается под тебя — надо только чуть вкатиться.');
-    print('Набери помощь, чтобы увидеть список команд.');
-    ui.focus();
-  });
-}
-
+mapToggle.addEventListener('click', () => { if (ready) showMap(nav.hidden); });
+document.getElementById('onboarding-action').addEventListener('click', () => loadLessonByIndex(0));
+document.getElementById('onboarding-practice').addEventListener('click', openFree);
+document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => handleCommand(button.dataset.command)));
+window.addEventListener('hashchange', () => { if (ready) openAddress(); });
 init();
 
-// Экспорты для smoke-тестов сценариев.
 export { handleCommand, engine, ui, loadLessonByIndex };

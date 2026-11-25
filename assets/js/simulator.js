@@ -1,7 +1,6 @@
 /**
  * simulator.js — чистая логика терминала для учебника «Linux за 2 месяца».
  * Не зависит от DOM, может быть require()-нут из Node для smoke-тестов.
- * v2: режимы оболочки (bash/fish/zsh), ps/kill/ping/curl, темы через CSS.
  */
 (function () {
   'use strict';
@@ -12,12 +11,12 @@
   const now = () => Date.now();
 
   function makeDir(children, mtime) {
-    return { type: 'dir', children: children || {}, mtime: mtime || now() };
+    return { type: 'dir', children: Object.assign(Object.create(null), children), mode: 0o755, mtime: mtime || now() };
   }
 
   function makeFile(content, mtime) {
     const text = content == null ? '' : String(content);
-    return { type: 'file', content: text, mtime: mtime || now(), size: text.length };
+    return { type: 'file', content: text, mode: 0o644, mtime: mtime || now(), size: text.length };
   }
 
   function deepClone(obj) {
@@ -49,28 +48,10 @@
     return '/' + stack.join('/');
   }
 
-  function expandVars(text) {
-    return String(text).replace(/\$(HOME|USER)\b/g, (_, name) => ENV[name]);
-  }
-
-  function abbreviateCwd(cwd) {
-    if (cwd === ENV.HOME) return '~';
-    if (cwd.startsWith(ENV.HOME + '/')) return '~' + cwd.slice(ENV.HOME.length);
-    return cwd;
-  }
-
-  /* ---------- промпты оболочек ---------- */
   function getPrompt(session) {
-    const d = abbreviateCwd(session.cwd);
-    switch (session.shell) {
-      case 'fish':
-        return `user@linux ${d}>`;
-      case 'zsh':
-        return `${d} ❯`;
-      case 'bash':
-      default:
-        return `user@linux:${d}$`;
-    }
+    const cwd = session.cwd;
+    const path = cwd === ENV.HOME || cwd.startsWith(ENV.HOME + '/') ? '~' + cwd.slice(ENV.HOME.length) : cwd;
+    return `user@linux:${path}$`;
   }
 
   /* ---------- файловая модель ---------- */
@@ -102,7 +83,7 @@
     let node = root;
     for (const part of parts) {
       if (node.type !== 'dir') return undefined;
-      node = node.children[part];
+      node = Object.hasOwn(node.children, part) ? node.children[part] : undefined;
       if (!node) return undefined;
     }
     return node;
@@ -114,7 +95,7 @@
     let node = root;
     for (const part of parts) {
       if (node.type !== 'dir') return { parent: null, name };
-      node = node.children[part];
+      node = Object.hasOwn(node.children, part) ? node.children[part] : undefined;
       if (!node) return { parent: null, name };
     }
     return { parent: node.type === 'dir' ? node : null, name };
@@ -129,8 +110,10 @@
     let node = root;
     for (const part of parts) {
       if (node.type !== 'dir') return false;
-      if (!node.children[part]) node.children[part] = makeDir();
-      node = node.children[part];
+      if (!Object.hasOwn(node.children, part)) {
+        Object.defineProperty(node.children, part, { value: makeDir(), writable: true, enumerable: true, configurable: true });
+      }
+      node = Object.hasOwn(node.children, part) ? node.children[part] : undefined;
     }
     return true;
   }
@@ -138,20 +121,21 @@
   function setNode(root, absPath, node) {
     const { parent, name } = getParent(root, absPath);
     if (!parent) return false;
-    parent.children[name] = node;
+    Object.defineProperty(parent.children, name, { value: node, writable: true, enumerable: true, configurable: true });
     return true;
   }
 
   function removeNode(root, absPath) {
     const { parent, name } = getParent(root, absPath);
-    if (!parent || !(name in parent.children)) return false;
+    if (!parent || !Object.hasOwn(parent.children, name)) return false;
     delete parent.children[name];
     return true;
   }
 
   function copyNode(node) {
-    if (node.type === 'file') return makeFile(node.content, node.mtime);
+    if (node.type === 'file') return { ...node };
     const copy = makeDir({}, node.mtime);
+    copy.mode = node.mode;
     for (const [k, v] of Object.entries(node.children)) copy.children[k] = copyNode(v);
     return copy;
   }
@@ -169,53 +153,80 @@
   }
 
   /* ---------- парсер командной строки ---------- */
-  function tokenizeSegment(segment) {
+  function parseLine(line, env) {
     const tokens = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < segment.length; i++) {
-      const ch = segment[i];
-      if (ch === '"') { inQuotes = !inQuotes; continue; }
-      if (ch === ' ' && !inQuotes) {
-        if (cur !== '') tokens.push(cur);
-        cur = '';
-        continue;
-      }
-      cur += ch;
-    }
-    if (cur !== '') tokens.push(cur);
-    return tokens.map(expandVars);
-  }
+    let word = '';
+    let started = false;
+    let quote = '';
+    const flush = () => {
+      if (started) tokens.push({ word });
+      word = '';
+      started = false;
+    };
 
-  function splitPipes(line) {
-    const parts = [];
-    let cur = '';
-    let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') { inQuotes = !inQuotes; cur += ch; continue; }
-      if (ch === '|' && !inQuotes) { parts.push(cur); cur = ''; continue; }
-      cur += ch;
-    }
-    parts.push(cur);
-    return parts.map(s => s.trim());
-  }
-
-  function parseSegment(segment) {
-    const raw = tokenizeSegment(segment);
-    const argv = [];
-    let redirectFile = null;
-    let append = false;
-    for (let i = 0; i < raw.length; i++) {
-      const t = raw[i];
-      if (t === '>' || t === '>>') {
-        append = t === '>>';
-        if (i + 1 < raw.length) redirectFile = raw[++i];
+      const char = line[i];
+      const next = line[i + 1];
+      if (char === quote) { quote = ''; continue; }
+      if (!quote && (char === '"' || char === "'")) { quote = char; started = true; continue; }
+      if (char === '\\' && (!quote || (quote === '"' && ['"', '$', '\\'].includes(next)))) {
+        if (next === undefined) throw new Error('незавершённое экранирование');
+        word += next;
+        started = true;
+        i++;
         continue;
       }
-      argv.push(t);
+      if (!quote && /\s/.test(char)) { flush(); continue; }
+      if (!quote && ['|', '>', '<', ';', '&'].includes(char)) {
+        const errorRedirect = char === '>' && word === '2' && started && /(?:^|[\s|;&])2$/.test(line.slice(0, i));
+        if (errorRedirect) { word = ''; started = false; }
+        flush();
+        const paired = next === char && ['>', '|', '&'].includes(char);
+        tokens.push({ op: (errorRedirect ? '2' : '') + char + (paired ? char : '') });
+        if (paired) i++;
+        continue;
+      }
+      if (char === '$' && quote !== "'") {
+        if (next === '(') throw new Error('подстановка команд пока недоступна');
+        const variable = line.slice(i + 1).match(/^(?:[A-Za-z_][A-Za-z_0-9]*|\?)/);
+        if (variable) {
+          word += env[variable[0]] ?? '';
+          started = true;
+          i += variable[0].length;
+          continue;
+        }
+      }
+      if (!quote && char === '#' && !started) break;
+      word += char;
+      started = true;
     }
-    return { argv, redirectFile, append };
+    if (quote) throw new Error('закрой кавычки');
+    flush();
+    return tokens;
+  }
+
+  function parsePipeline(tokens) {
+    const stages = [];
+    let stage = { argv: [], redirects: [] };
+    let connector = ';';
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (!token.op) { stage.argv.push(token.word); continue; }
+      if (['>', '>>', '2>', '2>>', '<'].includes(token.op)) {
+        const target = tokens[++i];
+        if (!target || target.op) throw new Error('укажи файл для перенаправления');
+        stage.redirects.push({ op: token.op, path: target.word });
+      } else {
+        if (!stage.argv.length && !stage.redirects.length) throw new Error('ожидалась команда');
+        if (token.op === '&') throw new Error('фоновые команды пока недоступны');
+        stages.push({ ...stage, connector });
+        stage = { argv: [], redirects: [] };
+        connector = token.op;
+      }
+    }
+    if (stage.argv.length || stage.redirects.length) stages.push({ ...stage, connector });
+    else if (stages.length && connector !== ';') throw new Error('ожидалась команда после оператора');
+    return stages;
   }
 
   /* ---------- форматирование ---------- */
@@ -245,8 +256,9 @@
   }
 
   function permissions(node) {
-    if (node.type === 'dir') return 'drwxr-xr-x';
-    return '-rw-r--r--';
+    const mode = node.mode ?? (node.type === 'dir' ? 0o755 : 0o644);
+    const bits = Array.from('rwxrwxrwx', (letter, index) => (mode & (1 << (8 - index))) ? letter : '-').join('');
+    return (node.type === 'dir' ? 'd' : '-') + bits;
   }
 
   function longLine(node, name, human) {
@@ -256,10 +268,10 @@
   }
 
   function ok() { return { stdout: '', exit: 0 }; }
-  function err(msg) { return { stdout: msg + '\n', exit: 1 }; }
+  function err(msg, exit = 1) { return { stdout: '', stderr: msg + '\n', exit }; }
 
   /* ---------- команды ---------- */
-  const COMMANDS = {};
+  const COMMANDS = Object.create(null);
 
   COMMANDS.pwd = (argv, stdin, session) => ({ stdout: session.cwd + '\n', exit: 0 });
 
@@ -271,11 +283,12 @@
 
   COMMANDS.help = (argv, stdin, session) => ({
     stdout:
-      `Режим оболочки: ${session.shell || 'bash'}\n` +
+      'Оболочка: Bash\n' +
       'Доступные команды:\n' +
       '  pwd, ls, cd, cat, head, tail, touch, mkdir, cp, mv, rm\n' +
       '  echo, grep, wc, tree, whoami, date, clear, history, help, man\n' +
-      '  uname, df, free, ps, kill, ping, curl\n',
+      '  uname, df, free, ps, kill, ping, curl\n' +
+      '  chmod, diff, find, sort, uniq, systemctl, journalctl\n',
     exit: 0
   });
 
@@ -356,9 +369,11 @@
     return ok();
   };
 
-  COMMANDS.ping = (argv) => {
-    const host = argv[0] || 'localhost';
-    const ip = host === 'localhost' ? '127.0.0.1' : '93.184.216.34';
+  COMMANDS.ping = (argv, stdin, session) => {
+    const host = argv.at(-1) || 'localhost';
+    const route = session.network?.[host];
+    if (route && !route.dns) return err(`ping: ${host}: Name or service not known`);
+    const ip = route?.ip || (host === 'localhost' ? '127.0.0.1' : '93.184.216.34');
     const lines = [`PING ${host} (${ip}) 56(84) bytes of data.`];
     for (let i = 1; i <= 4; i++) {
       lines.push(`64 bytes from ${ip}: icmp_seq=${i} ttl=64 time=${(38 + i * 3) / 1000} ms`);
@@ -370,9 +385,16 @@
     return { stdout: lines.join('\n') + '\n', exit: 0 };
   };
 
-  COMMANDS.curl = (argv) => {
-    const url = argv[0] || '';
+  COMMANDS.curl = (argv, stdin, session) => {
+    const url = argv.at(-1) || '';
     if (!url) return err("curl: try 'curl <URL>'");
+    let host;
+    try { host = new URL(url).hostname; }
+    catch { return err('curl: укажи полный URL с протоколом'); }
+    const route = session.network?.[host];
+    if (route && !route.dns) return err(`curl: Could not resolve host: ${host}`, 6);
+    if (route && !route.http) return err(`curl: Failed to connect to ${host}: Connection refused`, 7);
+    if (route) return { stdout: route.http, exit: 0 };
     const html = `<!DOCTYPE html>
 <html>
 <head><title>${url}</title></head>
@@ -447,11 +469,11 @@
     if (flags.error) return err(flags.error);
     const target = normalizePath(flags.pathArg || '.', session.cwd);
     const node = getNode(session.fs, target);
-    if (!node) return err(`ls: cannot access '${flags.pathArg || ''}': No such file or directory`);
+    if (!node) return err(`ls: cannot access '${flags.pathArg || ''}': No such file or directory`, 2);
     if (node.type === 'file') {
       return flags.l ? { stdout: longLine(node, basename(target), flags.h) + '\n', exit: 0 } : { stdout: basename(target) + '\n', exit: 0 };
     }
-    let entries = Object.keys(node.children);
+    let entries = Object.keys(node.children).filter(name => flags.a || !name.startsWith('.')).sort();
     if (flags.a) entries = ['.', '..'].concat(entries);
     if (flags.t) {
       const parentPath = target;
@@ -492,6 +514,32 @@
     return { stdout: lines.join('\n') + '\n', exit: 0 };
   };
 
+  COMMANDS.find = (argv, stdin, session) => {
+    const args = [...argv];
+    const root = args[0]?.startsWith('-') || !args.length ? '.' : args.shift();
+    let pattern = null;
+    let type = null;
+    while (args.length) {
+      const [option, value] = args.splice(0, 2);
+      if (option === '-name' && value) {
+        const regex = value.replace(/[.+^$${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+        pattern = new RegExp('^' + regex + '$');
+      } else if (option === '-type' && ['d', 'f'].includes(value)) type = value;
+      else return err('find: supported predicates: -name PATTERN, -type f|d');
+    }
+    const node = getNode(session.fs, normalizePath(root, session.cwd));
+    if (!node) return err(`find: ${root}: No such file or directory`);
+    const lines = [];
+    function walk(entry, path) {
+      if ((!pattern || pattern.test(basename(path))) && (!type || entry.type[0] === type)) lines.push(path);
+      if (entry.type === 'dir') {
+        for (const [name, child] of Object.entries(entry.children)) walk(child, path.replace(/\/$/, '') + '/' + name);
+      }
+    }
+    walk(node, root);
+    return { stdout: lines.length ? lines.join('\n') + '\n' : '', exit: 0 };
+  };
+
   COMMANDS.cd = (argv, stdin, session) => {
     const target = argv[0] ? normalizePath(argv[0], session.cwd) : ENV.HOME;
     const node = getNode(session.fs, target);
@@ -507,14 +555,15 @@
       return err('cat: missing file operand');
     }
     const out = [];
+    const errors = [];
     for (const arg of argv) {
-      const p = normalizePath(arg, session.cwd);
-      const node = getNode(session.fs, p);
-      if (!node) { out.push(`cat: ${arg}: No such file or directory`); continue; }
-      if (node.type === 'dir') { out.push(`cat: ${arg}: Is a directory`); continue; }
+      const node = getNode(session.fs, normalizePath(arg, session.cwd));
+      if (!node) { errors.push(`cat: ${arg}: No such file or directory`); continue; }
+      if (node.type === 'dir') { errors.push(`cat: ${arg}: Is a directory`); continue; }
+      if ((node.mode & 0o400) === 0) { errors.push(`cat: ${arg}: Permission denied`); continue; }
       out.push(node.content);
     }
-    return { stdout: out.join('') + (out.length ? '' : ''), exit: 0 };
+    return { stdout: out.join(''), stderr: errors.length ? errors.join('\n') + '\n' : '', exit: Number(errors.length > 0) };
   };
 
   function headTail(argv, stdin, session, tail) {
@@ -557,7 +606,7 @@
       if (node) { node.mtime = now(); continue; }
       const { parent, name } = getParent(session.fs, p);
       if (!parent) return err(`touch: cannot touch '${arg}': No such file or directory`);
-      parent.children[name] = makeFile('');
+      setNode(session.fs, p, makeFile(''));
     }
     return ok();
   };
@@ -578,12 +627,11 @@
         return err(`mkdir: cannot create directory '${arg}': File exists`);
       }
       if (p) {
-        ensureDir(session.fs, target);
+        if (!ensureDir(session.fs, target)) return err(`mkdir: cannot create directory '${arg}': Not a directory`);
       } else {
         const { parent } = getParent(session.fs, target);
         if (!parent) return err(`mkdir: cannot create directory '${arg}': No such file or directory`);
-        const base = basename(target);
-        parent.children[base] = makeDir();
+        setNode(session.fs, target, makeDir());
       }
     }
     return ok();
@@ -607,7 +655,8 @@
         targetPath = destPath + '/' + basename(srcPath);
         destNode = getNode(session.fs, targetPath);
       }
-      const { parent, name } = getParent(session.fs, targetPath);
+      if (srcPath === targetPath || targetPath.startsWith(srcPath + '/')) return err('cp: источник и цель совпадают или вложены');
+      const { parent } = getParent(session.fs, targetPath);
       if (!parent) return err(`cp: cannot create regular file '${targetPath}': No such file or directory`);
       if (destNode && destNode.type === 'dir' && srcNode.type === 'file') {
         targetPath = targetPath + '/' + basename(srcPath);
@@ -627,6 +676,8 @@
     let destPath = normalizePath(destRaw, session.cwd);
     const destNode = getNode(session.fs, destPath);
     if (destNode && destNode.type === 'dir') destPath = destPath + '/' + basename(srcPath);
+    if (destPath === srcPath || destPath.startsWith(srcPath + '/')) return err('mv: источник и цель совпадают или вложены');
+    if (!getParent(session.fs, destPath).parent) return err(`mv: cannot move '${srcRaw}' to '${destRaw}': No such file or directory`);
     const destNode2 = getNode(session.fs, destPath);
     if (destNode2) {
       if (srcNode.type === 'dir' && destNode2.type === 'file') {
@@ -640,33 +691,35 @@
   };
 
   COMMANDS.rm = (argv, stdin, session) => {
-    let r = false;
+    let recursive = false;
+    let force = false;
+    let options = true;
     const files = [];
-    for (const a of argv) { if (a === '-r') r = true; else files.push(a); }
-    if (!files.length) return err('rm: missing operand');
+    for (const arg of argv) {
+      if (options && arg === '--') { options = false; continue; }
+      if (options && /^-[rfR]+$/.test(arg)) {
+        recursive ||= /[rR]/.test(arg);
+        force ||= arg.includes('f');
+      } else if (options && arg.startsWith('-')) {
+        return err(`rm: invalid option: ${arg}`);
+      } else files.push(arg);
+    }
+    if (!files.length) return force ? ok() : err('rm: missing operand');
     for (const arg of files) {
-      const p = normalizePath(arg, session.cwd);
-      const node = getNode(session.fs, p);
+      const path = normalizePath(arg, session.cwd);
+      if (path === '/' || /(?:^|\/)\.\.?\/?$/.test(arg)) return err('rm: refusing to remove root, . or ..');
+      const node = getNode(session.fs, path);
+      if (!node && force) continue;
       if (!node) return err(`rm: cannot remove '${arg}': No such file or directory`);
-      if (node.type === 'dir' && !r) return err(`rm: cannot remove '${arg}': Is a directory`);
-      removeNode(session.fs, p);
+      if (node.type === 'dir' && !recursive) return err(`rm: cannot remove '${arg}': Is a directory`);
+      removeNode(session.fs, path);
     }
     return ok();
   };
 
-  COMMANDS.echo = (argv, stdin, session, redirect) => {
-    const text = argv.join(' ') + '\n';
-    if (redirect && redirect.file) {
-      const p = normalizePath(redirect.file, session.cwd);
-      const { parent, name } = getParent(session.fs, p);
-      if (!parent) return err(`bash: ${redirect.append ? '>>' : '>'}: ${redirect.file}: No such file or directory`);
-      const existing = parent.children[name];
-      if (existing && existing.type === 'dir') return err(`bash: ${redirect.append ? '>>' : '>'}: ${redirect.file}: Is a directory`);
-      if (existing && redirect.append) existing.content += text;
-      else parent.children[name] = makeFile(text);
-      return ok();
-    }
-    return { stdout: text, exit: 0 };
+  COMMANDS.echo = (argv) => {
+    const newline = argv[0] !== '-n';
+    return { stdout: (newline ? argv : argv.slice(1)).join(' ') + (newline ? '\n' : ''), exit: 0 };
   };
 
   COMMANDS.grep = (argv, stdin, session) => {
@@ -695,6 +748,8 @@
     const matches = (line) => regex.test(line) !== v;
     const out = [];
     const sources = [];
+    const errors = [];
+    let found = false;
     if (!files.length) {
       if (stdin == null) return err('grep: missing file operand');
       sources.push({ name: '-', content: stdin });
@@ -702,18 +757,19 @@
       for (const f of files) {
         const p = normalizePath(f, session.cwd);
         const node = getNode(session.fs, p);
-        if (!node) { out.push(`grep: ${f}: No such file or directory`); continue; }
-        if (node.type === 'dir') { out.push(`grep: ${f}: Is a directory`); continue; }
+        if (!node) { errors.push(`grep: ${f}: No such file or directory`); continue; }
+        if (node.type === 'dir') { errors.push(`grep: ${f}: Is a directory`); continue; }
         sources.push({ name: f, content: node.content });
       }
     }
     for (const src of sources) {
-      const lines = src.content.split('\n');
+      const lines = src.content ? src.content.split('\n') : [];
       if (src.content.endsWith('\n')) lines.pop();
       const matched = [];
       lines.forEach((line, idx) => {
         if (matches(line)) matched.push({ n: idx + 1, line });
       });
+      found ||= matched.length > 0;
       if (c) {
         const prefix = sources.length > 1 ? `${src.name}:` : '';
         out.push(prefix + matched.length);
@@ -724,7 +780,7 @@
         }
       }
     }
-    return { stdout: out.join('\n') + (out.length ? '\n' : ''), exit: 0 };
+    return { stdout: out.join('\n') + (out.length ? '\n' : ''), stderr: errors.length ? errors.join('\n') + '\n' : '', exit: errors.length ? 2 : Number(!found) };
   };
 
   COMMANDS.wc = (argv, stdin, session) => {
@@ -777,60 +833,158 @@
     return { stdout: out.join('\n') + '\n', exit: 0 };
   };
 
-  /* ---------- исполнение ---------- */
-  function runOne(session, argv, stdin, redirect) {
-    if (!argv.length) return ok();
-    const cmd = argv[0];
-    const args = argv.slice(1);
-    if (cmd === 'echo') {
-      return COMMANDS.echo(args, stdin, session, redirect ? { file: redirect.file, append: redirect.append } : null);
+  COMMANDS.chmod = (argv, stdin, session) => {
+    const [mode, ...paths] = argv;
+    if (!mode || !paths.length) return err('chmod: usage: chmod MODE FILE');
+    const numeric = /^[0-7]{3,4}$/.test(mode);
+    const symbolic = /^([ugoa]*)([+=-])([rwx]+)$/.exec(mode);
+    if (!numeric && !symbolic) return err(`chmod: unsupported mode: ${mode}`);
+    for (const path of paths) {
+      const node = getNode(session.fs, normalizePath(path, session.cwd));
+      if (!node) return err(`chmod: cannot access '${path}': No such file or directory`);
+      if (numeric) { node.mode = parseInt(mode, 8); continue; }
+      const [, who, operator, bits] = symbolic;
+      const value = (bits.includes('r') ? 4 : 0) | (bits.includes('w') ? 2 : 0) | (bits.includes('x') ? 1 : 0);
+      for (const [group, shift] of [['u', 6], ['g', 3], ['o', 0]]) {
+        if (who && !who.includes('a') && !who.includes(group)) continue;
+        if (operator === '=') node.mode = (node.mode & ~(7 << shift)) | (value << shift);
+        if (operator === '+') node.mode |= value << shift;
+        if (operator === '-') node.mode &= ~(value << shift);
+      }
     }
-    if (redirect && redirect.file) {
-      const fake = runOne(session, argv, stdin, null);
-      const p = normalizePath(redirect.file, session.cwd);
-      const { parent, name } = getParent(session.fs, p);
-      if (!parent) return err(`bash: ${redirect.append ? '>>' : '>'}: ${redirect.file}: No such file or directory`);
-      const existing = parent.children[name];
-      if (existing && existing.type === 'dir') return err(`bash: ${redirect.append ? '>>' : '>'}: ${redirect.file}: Is a directory`);
-      if (existing && redirect.append) existing.content += fake.stdout;
-      else parent.children[name] = makeFile(fake.stdout);
-      return ok();
+    return ok();
+  };
+
+  COMMANDS.diff = (argv, stdin, session) => {
+    if (argv.length !== 2) return err('diff: usage: diff FILE FILE', 2);
+    const nodes = argv.map(path => getNode(session.fs, normalizePath(path, session.cwd)));
+    if (nodes.some(node => node?.type !== 'file')) return err('diff: expected two existing files', 2);
+    return nodes[0].content === nodes[1].content ? ok() : { stdout: `Files ${argv.join(' and ')} differ\n`, exit: 1 };
+  };
+
+  function linesFromInput(argv, stdin, session, name) {
+    const source = argv.length ? COMMANDS.cat(argv, stdin, session) : { stdout: stdin || '', exit: 0 };
+    if (source.exit) return { result: err(`${name}: ${source.stderr.trim()}`) };
+    return { lines: source.stdout ? source.stdout.replace(/\n$/, '').split('\n') : [] };
+  }
+
+  COMMANDS.sort = (argv, stdin, session) => {
+    const { lines, result } = linesFromInput(argv, stdin, session, 'sort');
+    return result || { stdout: lines.length ? lines.sort().join('\n') + '\n' : '', exit: 0 };
+  };
+
+  COMMANDS.uniq = (argv, stdin, session) => {
+    const { lines, result } = linesFromInput(argv, stdin, session, 'uniq');
+    return result || { stdout: lines.length ? lines.filter((line, i) => !i || line !== lines[i - 1]).join('\n') + '\n' : '', exit: 0 };
+  };
+
+  COMMANDS.systemctl = (argv, stdin, session) => {
+    const [action, name] = argv;
+    const service = session.services?.[name?.replace(/\.service$/, '')];
+    if (!service) return err(`systemctl: Unit ${name || '…'} not found`);
+    if (action === 'status' || action === 'is-active') {
+      return { stdout: (action === 'status' ? `${name} — ` : '') + service.state + '\n', exit: service.state === 'active' ? 0 : 3 };
     }
-    const fn = COMMANDS[cmd];
-    if (!fn) return err(`${cmd}: command not found`);
-    return fn(args, stdin, session);
+    if (action === 'stop') { service.state = 'inactive'; return ok(); }
+    if (action !== 'start' && action !== 'restart') return err('systemctl: supported actions: status, start, stop, restart, is-active');
+    const file = getNode(session.fs, normalizePath(service.requires, ENV.HOME));
+    if (file?.type !== 'file' || file.content.trim() !== service.expected) {
+      service.state = 'failed';
+      service.log.push(`ERROR: expected ${service.expected} in ${service.requires}`);
+      return err(`Job for ${name}.service failed. See journalctl -u ${name}.`);
+    }
+    service.state = 'active';
+    service.log.push('INFO: service started');
+    return ok();
+  };
+
+  COMMANDS.journalctl = (argv, stdin, session) => {
+    const service = argv[0] === '-u' && session.services?.[argv[1]?.replace(/\.service$/, '')];
+    if (!service) return err('journalctl: usage: journalctl -u UNIT');
+    return { stdout: service.log.join('\n') + '\n', exit: 0 };
+  };
+
+  function runStage(session, stage, stdin) {
+    let outPath;
+    let errorPath;
+    for (const { op, path } of stage.redirects) {
+      const target = normalizePath(path, session.cwd);
+      const existing = getNode(session.fs, target);
+      if (op === '<') {
+        if (existing?.type !== 'file') return err(`bash: ${path}: cannot read file`);
+        stdin = existing.content;
+        continue;
+      }
+      if (existing?.type === 'dir') return err(`bash: ${path}: Is a directory`);
+      if ((existing && !(existing.mode & 0o200)) || !getParent(session.fs, target).parent) {
+        return err(`bash: ${path}: cannot write file`);
+      }
+      if (!existing || !op.endsWith('>>')) {
+        const file = makeFile('');
+        if (existing) file.mode = existing.mode;
+        setNode(session.fs, target, file);
+      }
+      if (op.startsWith('2')) errorPath = target;
+      else outPath = target;
+    }
+    const [cmd, ...args] = stage.argv;
+    const result = !cmd ? ok() : COMMANDS[cmd]?.(args, stdin, session) || err(`${cmd}: command not found`, 127);
+    for (const [path, value] of [[outPath, result.stdout], [errorPath, result.stderr]]) {
+      if (!path || !value) continue;
+      const file = getNode(session.fs, path);
+      if (file?.type === 'file') {
+        file.content += value;
+        file.size = file.content.length;
+        file.mtime = now();
+        file.generatedBy = { command: cmd, args };
+      }
+    }
+    return { ...result, stdout: outPath ? '' : result.stdout, stderr: errorPath ? '' : result.stderr || '' };
   }
 
   function execLine(session, line) {
     const trimmed = line.trim();
-    if (!trimmed) return { stdout: '', exit: 0 };
+    if (!trimmed) return { stdout: '', stderr: '', exit: 0 };
     session.history.push(trimmed);
-    const segments = splitPipes(trimmed);
-    let stdin = '';
-    let output = '';
-    let clear = false;
-    let exitCode = 0;
-    for (let i = 0; i < segments.length; i++) {
-      const { argv, redirectFile, append } = parseSegment(segments[i]);
-      const redirect = redirectFile ? { file: redirectFile, append } : null;
-      const result = runOne(session, argv, stdin, redirect);
-      if (result.clear) clear = true;
-      output = result.stdout;
-      exitCode = result.exit;
-      if (result.exit !== 0) {
-        stdin = '';
-        break;
-      }
-      stdin = result.stdout;
+    if (session.history.length > 150) session.history.shift();
+    session.lastCommand = '';
+    let stages;
+    try {
+      stages = parsePipeline(parseLine(trimmed, { ...session.env, '?': session.lastExit ?? 0 }));
+    } catch (error) {
+      session.lastOutput = '';
+      session.lastExit = 2;
+      return err(`bash: ${error.message}`, 2);
     }
-    session.lastOutput = output;
-    return { stdout: output, exit: exitCode, clear };
+    let stdout = '';
+    let stderr = '';
+    let pipeInput = null;
+    let clear = false;
+    let exit = 0;
+    let skip = false;
+    for (let index = 0; index < stages.length; index++) {
+      const stage = stages[index];
+      if (stage.connector !== '|') {
+        skip = (stage.connector === '&&' && exit !== 0) || (stage.connector === '||' && exit === 0);
+      }
+      if (skip) continue;
+      const result = runStage(session, stage, stage.connector === '|' ? pipeInput : null);
+      session.lastCommand = stage.argv[0] || '';
+      clear ||= !!result.clear;
+      exit = result.exit;
+      stderr += result.stderr || '';
+      pipeInput = result.stdout;
+      if (stages[index + 1]?.connector !== '|') stdout += result.stdout;
+    }
+    session.lastExit = exit;
+    session.lastOutput = stdout;
+    return { stdout, stderr, exit, clear };
   }
 
   /* ---------- проверки ---------- */
   function runChecks(session, checks) {
     const failures = [];
-    if (!Array.isArray(checks)) return { passed: true, failures };
+    if (!Array.isArray(checks) || !checks.length) return { passed: false, failures };
     for (const check of checks) {
       const type = check.type;
       let okFlag = false;
@@ -844,8 +998,27 @@
           okFlag = n && n.type === 'file' && n.content.includes(check.text);
           break;
         }
+        case 'file_equals': {
+          const node = getNode(session.fs, normalizePath(check.path, session.cwd));
+          okFlag = node?.type === 'file' && node.content.replace(/\n$/, '') === check.text.replace(/\n$/, '');
+          break;
+        }
+        case 'file_generated': {
+          const node = getNode(session.fs, normalizePath(check.path, session.cwd));
+          const origin = node?.generatedBy;
+          okFlag = origin?.command === check.command && (!check.arg || origin.args.includes(check.arg));
+          break;
+        }
+        case 'mode_equals': {
+          const node = getNode(session.fs, normalizePath(check.path, session.cwd));
+          okFlag = node?.mode === Number.parseInt(check.mode, 8);
+          break;
+        }
+        case 'process_absent': okFlag = !session.processes.some(p => p.pid === check.pid); break;
+        case 'process_present': okFlag = session.processes.some(p => p.pid === check.pid); break;
+        case 'service_state': okFlag = session.services?.[check.name]?.state === check.state; break;
         case 'cwd_equals': okFlag = session.cwd === normalizePath(check.path, session.cwd); break;
-        case 'output_contains': okFlag = (session.lastOutput || '').includes(check.text); break;
+        case 'output_contains': okFlag = session.lastExit === 0 && (session.lastOutput || '').includes(check.text) && (!check.commands || check.commands.includes(session.lastCommand)); break;
         default: okFlag = false;
       }
       if (!okFlag) failures.push(check.message || `check ${type} failed`);
@@ -876,10 +1049,12 @@
     }
     const dir = getNode(session.fs, dirPath);
     if (!dir || dir.type !== 'dir') return { suggestion: prefix, list: [] };
-    const matches = Object.keys(dir.children).filter(n => n.startsWith(namePrefix));
+    const matches = Object.keys(dir.children).filter(n => n.startsWith(namePrefix) && (namePrefix.startsWith('.') || !n.startsWith('.'))).sort();
     if (matches.length === 1) {
-      const full = before + parentRaw + matches[0];
-      return { suggestion: full, list: matches };
+      const directory = dir.children[matches[0]].type === 'dir';
+      const escaped = matches[0].replace(/[\s'"\\$]/g, char => '\\' + char);
+      const full = before + parentRaw + escaped + (directory ? '/' : '');
+      return { suggestion: full, list: matches, directory };
     }
     return { suggestion: prefix, list: matches };
   }
@@ -894,8 +1069,11 @@
         history: [],
         lastOutput: '',
         env: Object.assign({}, ENV),
-        shell: setup.shell || 'bash',
-        processes: defaultProcesses()
+        lastExit: 0,
+        lastCommand: '',
+        processes: setup.processes ? deepClone(setup.processes) : defaultProcesses(),
+        network: deepClone(setup.network || {}),
+        services: deepClone(setup.services || {})
       };
     },
     exec: function (session, line) {

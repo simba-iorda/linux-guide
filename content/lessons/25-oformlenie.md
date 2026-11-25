@@ -71,9 +71,9 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```terminal
 {
+  "id": "t0",
   "title": "Конфиг терминала Kitty",
-  "task": "Прочитай конфиг Kitty и найди строку, которая задаёт шрифт. Обрати внимание: этот блок работает в fish — приглашение отличается от bash.",
-  "shell": "fish",
+  "task": "Прочитай конфиг Kitty и найди строку, которая задаёт шрифт.",
   "setup": {
     "cwd": "/home/user",
     "tree": {
@@ -86,7 +86,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
     }
   },
   "check": [
-    { "type": "output_contains", "text": "font_family", "message": "найдена строка с настройкой шрифта" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "font_family", "message": "найдена строка с настройкой шрифта" }
   ],
   "solution": ["cat .config/kitty/kitty.conf"],
   "hint": "Конфиг Kitty — один файл ~/.config/kitty/kitty.conf"
@@ -95,9 +95,9 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```terminal
 {
+  "id": "t1",
   "title": "Какая тема подключена",
   "task": "В том же конфиге найди строку с темой Catppuccin, не обращая внимания на регистр букв (флаг -i у grep).",
-  "shell": "bash",
   "setup": {
     "cwd": "/home/user",
     "tree": {
@@ -110,7 +110,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
     }
   },
   "check": [
-    { "type": "output_contains", "text": "catppuccin", "message": "найдена строка с подключением темы" }
+    { "type": "output_contains", "commands": ["grep"], "text": "catppuccin", "message": "найдена строка с подключением темы" }
   ],
   "solution": ["grep -i catppuccin .config/kitty/kitty.conf"],
   "hint": "grep -i ищет без учёта регистра: и Catppuccin, и catppuccin"
@@ -119,6 +119,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```terminal
 {
+  "id": "t2",
   "title": "Какие конфиги уже есть",
   "task": "Посмотри дерево папки .config и убедись, что конфиг Kitty и файл темы лежат рядом, в одной папке.",
   "setup": {
@@ -133,7 +134,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
     }
   },
   "check": [
-    { "type": "output_contains", "text": "kitty", "message": "в дереве видна папка с конфигами терминала" }
+    { "type": "output_contains", "commands": ["tree", "find"], "text": "kitty", "message": "в дереве видна папка с конфигами терминала" }
   ],
   "solution": ["tree .config"],
   "hint": "tree рисует структуру папок: tree .config"
@@ -144,6 +145,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```quiz
 {
+  "id": "q0",
   "question": "Где на этом сайте переключается тема?",
   "options": ["В настройках браузера", "Цветными точками в шапке — выбор сохраняется в браузере", "В файле ~/.bashrc"],
   "answer": 1,
@@ -153,6 +155,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```quiz
 {
+  "id": "q1",
   "question": "Какой шрифт используется на сайте для кода и терминала?",
   "options": ["Arial", "JetBrains Mono — моноширинный шрифт с лигатурами", "Times New Roman"],
   "answer": 1,
@@ -162,6 +165,7 @@ fc-list | grep -i jetbrains   # проверить, что шрифт виден
 
 ```quiz
 {
+  "id": "q2",
   "question": "Ты установил новый шрифт, но в настройках терминала его нет в списке. Что сделать?",
   "options": ["Перезагрузить компьютер", "Пересобрать кэш шрифтов: fc-cache -f -v и перезапустить терминал", "Установить шрифт ещё раз в другую папку"],
   "answer": 1,

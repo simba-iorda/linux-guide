@@ -68,12 +68,12 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```terminal
 {
+  "id": "t0",
   "title": "Прочитай расписание",
   "task": "Посмотри свой черновик задач: cat crontab.txt. Найди задачу, которая запускается каждый день в 3:00.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "crontab.txt": "# мои задачи\n*/5 * * * * /usr/local/bin/check.sh\n0 3 * * * /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1\n@reboot /usr/local/bin/warmup.sh\n" } },
   "check": [
-    { "type": "output_contains", "text": "0 3 * * *", "message": "ночная задача бэкапа найдена" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "0 3 * * *", "message": "ночная задача бэкапа найдена" }
   ],
   "solution": ["cat crontab.txt"],
   "hint": "cat выводит файл целиком"
@@ -82,12 +82,12 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```terminal
 {
+  "id": "t1",
   "title": "Что запускается при загрузке",
   "task": "Найди задачу со специальным расписанием @reboot: grep reboot crontab.txt.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "crontab.txt": "# мои задачи\n*/5 * * * * /usr/local/bin/check.sh\n0 3 * * * /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1\n@reboot /usr/local/bin/warmup.sh\n" } },
   "check": [
-    { "type": "output_contains", "text": "@reboot", "message": "задача автозапуска найдена" }
+    { "type": "output_contains", "commands": ["grep"], "text": "@reboot", "message": "задача автозапуска найдена" }
   ],
   "solution": ["grep reboot crontab.txt"],
   "hint": "grep печатает только строки с указанным словом"
@@ -98,6 +98,7 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что описывает расписание 0 3 * * *?",
   "options": ["Каждый день в 03:00", "Каждые 30 минут", "Только в марте"],
   "answer": 0,
@@ -107,6 +108,7 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```quiz
 {
+  "id": "q1",
   "question": "Сколько полей в cron-строке перед командой?",
   "options": ["Пять: минута, час, день месяца, месяц, день недели", "Три: час, минута, команда", "Два: время и путь"],
   "answer": 0,
@@ -116,6 +118,7 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```quiz
 {
+  "id": "q2",
   "question": "Почему в cron пишут полный путь к программе?",
   "options": ["У cron скудное окружение, и $PATH почти пуст", "Так короче", "Иначе задача выполнится дважды"],
   "answer": 0,
@@ -125,6 +128,7 @@ crontab -r          # 🔴 удалить все задачи (осторожн�
 
 ```quiz
 {
+  "id": "q3",
   "question": "Зачем добавлять >> /var/log/backup.log 2>&1 в cron-задачу?",
   "options": ["Чтобы сохранить и вывод, и ошибки задачи в файл", "Чтобы ускорить выполнение", "Чтобы запустить задачу от root"],
   "answer": 0,

@@ -61,11 +61,12 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```terminal
 {
+  "id": "t0",
   "title": "Кто занимает список",
   "task": "Посмотри снимок всех процессов командой ps aux и найди в нём строку браузера firefox — обычно он и есть главный потребитель.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "firefox", "message": "в списке найден процесс firefox" }
+    { "type": "output_contains", "commands": ["ps"], "text": "firefox", "message": "в списке найден процесс firefox" }
   ],
   "solution": ["ps aux"],
   "hint": "ps aux выводит все процессы системы, со всеми колонками"
@@ -74,6 +75,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```terminal
 {
+  "id": "t1",
   "title": "Читаем сохранённый top",
   "task": "В файле top_snapshot.txt лежит один кадр экрана top. Найди строку с процессом firefox и посмотри его %CPU.",
   "setup": {
@@ -83,7 +85,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
     }
   },
   "check": [
-    { "type": "output_contains", "text": "firefox", "message": "строка с firefox найдена в снимке top" }
+    { "type": "output_contains", "commands": ["grep"], "text": "firefox", "message": "строка с firefox найдена в снимке top" }
   ],
   "solution": ["grep firefox top_snapshot.txt"],
   "hint": "grep ищет по образцу: grep firefox top_snapshot.txt"
@@ -92,6 +94,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```terminal
 {
+  "id": "t2",
   "title": "Сводка сверху",
   "task": "Выведи весь файл top_snapshot.txt и найди в первой строке значение load average — среднюю нагрузку за последние 1, 5 и 15 минут.",
   "setup": {
@@ -101,7 +104,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
     }
   },
   "check": [
-    { "type": "output_contains", "text": "load average", "message": "найдена строка со средней нагрузкой" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "load average", "message": "найдена строка со средней нагрузкой" }
   ],
   "solution": ["cat top_snapshot.txt"],
   "hint": "cat печатает файл целиком"
@@ -112,6 +115,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```quiz
 {
+  "id": "q0",
   "question": "Какая колонка в ps aux показывает, сколько процессора ест процесс?",
   "options": ["COMMAND", "PID", "%CPU"],
   "answer": 2,
@@ -121,6 +125,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```quiz
 {
+  "id": "q1",
   "question": "Чем top отличается от ps?",
   "options": ["top обновляет картинку в реальном времени, ps показывает один снимок", "top работает только от root", "top показывает только свои процессы"],
   "answer": 0,
@@ -130,6 +135,7 @@ ps aux --sort=-%cpu | head -10                 # топ-10 по процессо
 
 ```quiz
 {
+  "id": "q2",
   "question": "На машине 4 ядра, load average показывает 8.0. Это значит…",
   "options": ["Система перегружена: процессов, которым нужен процессор, вдвое больше, чем ядер", "Всё в порядке, load всегда должен быть больше ядер", "Свободно 8 ГБ памяти"],
   "answer": 0,

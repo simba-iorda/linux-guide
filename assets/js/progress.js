@@ -1,131 +1,108 @@
-/**
- * progress.js — учёт прогресса в localStorage.
- */
 const KEY = 'linux-tutorial-progress';
 const LAST_KEY = 'linux-tutorial-last-lesson';
 
-let data = load();
-let changeCallback = null;
+function emptyProgress() {
+  return { quizzes: {}, terminals: {}, lessons: {}, attempts: {}, challenges: {} };
+}
 
 function load() {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    // ignore
+    const saved = JSON.parse(localStorage.getItem(KEY));
+    if (saved && typeof saved === 'object') return { ...emptyProgress(), ...saved };
+  } catch {
+    // Storage may be unavailable in private or embedded browsers.
   }
-  return { quizzes: {}, terminals: {}, lessons: {} };
+  return emptyProgress();
 }
+
+let data = load();
 
 function save() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(data));
-  } catch (e) {
-    // ignore
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {
+    // The session can still continue in memory.
   }
-  if (changeCallback) changeCallback();
 }
 
-export function setLessonTotal(lessonId, quizCount, terminalCount) {
-  if (!data.lessons[lessonId]) {
-    data.lessons[lessonId] = { quizCount: 0, terminalCount: 0, done: false };
-  }
-  data.lessons[lessonId].quizCount = quizCount;
-  data.lessons[lessonId].terminalCount = terminalCount;
-  updateLesson(lessonId);
-}
-
-function countDone(prefix) {
-  return Object.keys(data[prefix]).filter(k => data[prefix][k]).length;
-}
-
-function countDoneByLesson(prefix, lessonId) {
-  const prefixStr = lessonId + '-';
-  return Object.keys(data[prefix]).filter(k => k.startsWith(prefixStr) && data[prefix][k]).length;
-}
-
-function isLessonDone(lessonId) {
-  const l = data.lessons[lessonId];
-  if (!l) return false;
-  const qDone = countDoneByLesson('quizzes', lessonId);
-  const tDone = countDoneByLesson('terminals', lessonId);
-  return qDone >= l.quizCount && tDone >= l.terminalCount;
-}
-
-function updateLesson(lessonId) {
-  const l = data.lessons[lessonId];
-  if (!l) return;
-  const wasDone = l.done;
-  l.done = isLessonDone(lessonId);
-  if (l.done !== wasDone) save();
-}
-
-export function markQuiz(lessonId, quizId) {
-  if (data.quizzes[quizId]) return;
-  data.quizzes[quizId] = true;
+export function setLessonTotal(lessonId, quizIds, taskIds) {
+  data.lessons[lessonId] = { quizIds, taskIds };
   save();
-  updateLesson(lessonId);
 }
 
-export function markTerminal(lessonId, taskId) {
-  if (data.terminals[taskId]) return;
-  data.terminals[taskId] = true;
-  save();
-  updateLesson(lessonId);
+export function isLessonDone(lessonId) {
+  const lesson = data.lessons[lessonId];
+  if (!lesson) return false;
+  if (!lesson.quizIds || !lesson.taskIds) return lesson.done === true;
+  return lesson.quizIds.every(id => isQuizDone(id)) && lesson.taskIds.every(id => isTerminalDone(id));
 }
 
 export function isQuizDone(id) {
-  return !!data.quizzes[id];
+  return data.quizzes[id] === true;
 }
 
 export function isTerminalDone(id) {
-  return !!data.terminals[id];
+  return data.terminals[id] === true;
 }
 
-export function isLessonDoneExported(id) {
-  return isLessonDone(id);
+export function markQuiz(id) {
+  data.quizzes[id] = true;
+  save();
 }
 
-export function completedLessons(lessonIds) {
-  return lessonIds.filter(id => isLessonDone(id));
+export function markTerminal(id) {
+  data.terminals[id] = true;
+  delete data.attempts[id];
+  save();
+}
+
+export function getAttempt(id) {
+  return data.attempts[id] ? structuredClone(data.attempts[id]) : null;
+}
+
+export function setAttempt(id, attempt) {
+  if (attempt === null) delete data.attempts[id];
+  else data.attempts[id] = structuredClone(attempt);
+  save();
+}
+
+export function getChallengeProgress(id) {
+  return data.challenges[id] || { passed: false, attempts: 0 };
+}
+
+export function setChallengeProgress(id, progress) {
+  data.challenges[id] = progress;
+  save();
+}
+
+export function getLocation() {
+  if (data.location) return data.location;
+  if (typeof data.currentLesson === 'number') return { legacyIndex: data.currentLesson };
+  try {
+    const idx = localStorage.getItem(LAST_KEY);
+    if (idx !== null && Number.isInteger(Number(idx))) return { legacyIndex: Number(idx) };
+  } catch {
+    // Optional legacy storage.
+  }
+  return null;
+}
+
+export function setLocation(location) {
+  data.location = location;
+  save();
 }
 
 export function resetProgress() {
-  data = { quizzes: {}, terminals: {}, lessons: {} };
+  data = emptyProgress();
   save();
-  try { localStorage.removeItem(LAST_KEY); } catch (e) {}
+  try { localStorage.removeItem(LAST_KEY); } catch {
+    // Optional legacy storage.
+  }
 }
 
-export function setCurrentLesson(idx) {
-  data.currentLesson = idx;
+export function getLegacyModule() {
+  return data.legacyModule || 1;
+}
+
+export function setLegacyModule(module) {
+  data.legacyModule = module;
   save();
-}
-
-export function getCurrentLesson() {
-  return typeof data.currentLesson === 'number' ? data.currentLesson : null;
-}
-
-export function setScrollPosition(y) {
-  data.scrollPosition = typeof y === 'number' ? y : 0;
-  save();
-}
-
-export function getScrollPosition() {
-  return typeof data.scrollPosition === 'number' ? data.scrollPosition : null;
-}
-
-export function onChange(cb) {
-  changeCallback = cb;
-}
-
-export function setLastLessonIndex(idx) {
-  try { localStorage.setItem(LAST_KEY, String(idx)); } catch (e) {}
-}
-
-export function getLastLessonIndex() {
-  try {
-    const raw = localStorage.getItem(LAST_KEY);
-    if (raw) return parseInt(raw, 10);
-  } catch (e) {}
-  return null;
 }

@@ -70,12 +70,12 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```terminal
 {
+  "id": "t0",
   "title": "Связь по имени",
   "task": "Проверь доступность сайта по имени: ping google.com. В выводе найди строки icmp_seq.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "net.md": "заметки по сети\n" } },
   "check": [
-    { "type": "output_contains", "text": "icmp_seq", "message": "пакеты дошли и вернулись" }
+    { "type": "output_contains", "commands": ["ping"], "text": "icmp_seq", "message": "пакеты дошли и вернулись" }
   ],
   "solution": ["ping google.com"],
   "hint": "Имя работает так же, как адрес: ping google.com"
@@ -84,12 +84,12 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```terminal
 {
+  "id": "t1",
   "title": "Только ли дело в DNS",
   "task": "Проверь связь по IP: ping 8.8.8.8. Если IP отвечает, а имя — нет, виноват DNS, а не сеть.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "net.md": "заметки по сети\n" } },
   "check": [
-    { "type": "output_contains", "text": "icmp_seq", "message": "IP-адрес отвечает, значит сеть жива" }
+    { "type": "output_contains", "commands": ["ping"], "text": "icmp_seq", "message": "IP-адрес отвечает, значит сеть жива" }
   ],
   "solution": ["ping 8.8.8.8"],
   "hint": "Просто замени имя на 8.8.8.8"
@@ -98,12 +98,12 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```terminal
 {
+  "id": "t2",
   "title": "Забрать страницу через curl",
   "task": "Скачай страницу командой curl https://example.com. curl печатает ответ сервера прямо в терминал.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "net.md": "заметки по сети\n" } },
   "check": [
-    { "type": "output_contains", "text": "html", "message": "сервер вернул HTML" }
+    { "type": "output_contains", "commands": ["curl"], "text": "html", "message": "сервер вернул HTML" }
   ],
   "solution": ["curl https://example.com"],
   "hint": "Один аргумент — адрес с https://"
@@ -114,6 +114,7 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что проверяет ping?",
   "options": ["Доходят ли пакеты до хоста и обратно", "Сколько свободного места на сервере", "Правильные ли права у файла"],
   "answer": 0,
@@ -123,6 +124,7 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```quiz
 {
+  "id": "q1",
   "question": "Ты сделал ping 8.8.8.8 (отвечает), а ping google.com — ошибка DNS. В чём дело?",
   "options": ["Сеть работает, сломан DNS", "Провайдер заблокировал интернет", "У google.com выключился сервер"],
   "answer": 0,
@@ -132,6 +134,7 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```quiz
 {
+  "id": "q2",
   "question": "Чем curl -I отличается от обычного curl URL?",
   "options": ["Показывает только заголовки ответа, без тела страницы", "Работает быстрее в 10 раз", "Скачивает файл на диск"],
   "answer": 0,
@@ -141,6 +144,7 @@ wget -r -np https://example.com/docs/      # зеркало папки (осто
 
 ```quiz
 {
+  "id": "q3",
   "question": "Зачем wget ключ -c?",
   "options": ["Продолжить оборванную загрузку с того же места", "Сжать файл при скачивании", "Считать контрольную сумму"],
   "answer": 0,

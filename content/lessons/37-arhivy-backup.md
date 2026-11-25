@@ -60,12 +60,12 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```terminal
 {
+  "id": "t0",
   "title": "Что упаковываем",
   "task": "Посмотри содержимое папки проекта: ls -lh site. Так оценивают, что попадёт в архив.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "site": { "index.html": "<html>Hello</html>\n", "style.css": "body { color: #333; }\n" }, "backups": {} } },
   "check": [
-    { "type": "output_contains", "text": "index.html", "message": "файлы проекта видны" }
+    { "type": "output_contains", "commands": ["ls"], "text": "index.html", "message": "файлы проекта видны" }
   ],
   "solution": ["ls -lh site"],
   "hint": "-l длинный формат, -h человекочитаемые размеры"
@@ -74,9 +74,9 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```terminal
 {
+  "id": "t1",
   "title": "Имя бэкапа с датой",
   "task": "Подготовь место для файла бэкапа с датой в имени: touch backup-2026-10-18.tar.gz. Настоящий tar делает то же с $(date +%F).",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "site": { "index.html": "<html>Hello</html>\n" }, "backups": {} } },
   "check": [
     { "type": "path_exists", "path": "/home/user/backup-2026-10-18.tar.gz", "message": "файл с датой в имени создан" }
@@ -90,6 +90,7 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что делает ключ c в tar -czvf arch.tar.gz dir/?",
   "options": ["Создаёт архив (create)", "Сжимает через xz", "Копирует в другую папку"],
   "answer": 0,
@@ -99,6 +100,7 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```quiz
 {
+  "id": "q1",
   "question": "Как посмотреть содержимое архива, не распаковывая его?",
   "options": ["tar -tzvf arch.tar.gz", "tar -xzvf arch.tar.gz", "zcat arch.tar.gz"],
   "answer": 0,
@@ -108,6 +110,7 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```quiz
 {
+  "id": "q2",
   "question": "Какое правило описывает 3-2-1?",
   "options": ["3 копии, 2 разных носителя, 1 вне дома", "3 диска, 2 пользователя, 1 пароль", "3 бэкапа в день, 2 ночью, 1 утром"],
   "answer": 0,
@@ -117,6 +120,7 @@ tar -czf "$HOME/backups/project-$(date +%F).tar.gz" "$HOME/project"
 
 ```quiz
 {
+  "id": "q3",
   "question": "Почему бэкап нужно периодически восстанавливать?",
   "options": ["Чтобы убедиться, что из него действительно можно восстановиться", "Чтобы ускорить архивацию", "Чтобы сжать архив сильнее"],
   "answer": 0,

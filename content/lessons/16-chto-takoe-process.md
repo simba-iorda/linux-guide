@@ -53,11 +53,12 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```terminal
 {
+  "id": "t0",
   "title": "Первое знакомство со списком",
   "task": "Выведи список процессов и найди в нём строку своей оболочки bash — той программы, внутри которой ты сейчас вводишь команды.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "bash", "message": "в списке виден процесс bash" }
+    { "type": "output_contains", "commands": ["ps"], "text": "bash", "message": "в списке виден процесс bash" }
   ],
   "solution": ["ps"],
   "hint": "ps без аргументов показывает процессы, связанные с твоим терминалом"
@@ -66,11 +67,12 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```terminal
 {
+  "id": "t1",
   "title": "Ищем процесс по имени",
   "task": "Список длинный, а нужен только браузер. Пропусти вывод ps через grep и оставь строки про firefox.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "firefox", "message": "осталась только строка с firefox" }
+    { "type": "output_contains", "commands": ["grep"], "text": "firefox", "message": "осталась только строка с firefox" }
   ],
   "solution": ["ps | grep firefox"],
   "hint": "Вертикальная черта | соединяет вывод одной команды со входом другой: ps | grep firefox"
@@ -79,11 +81,12 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```terminal
 {
+  "id": "t2",
   "title": "Читаем справку",
   "task": "У команды ps есть справка. Открой страницу описания команды ps и посмотри, какие у неё бывают флаги.",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "Заметки\n" } },
   "check": [
-    { "type": "output_contains", "text": "ps", "message": "открыта справка по команде ps" }
+    { "type": "output_contains", "commands": ["man"], "text": "ps", "message": "открыта справка по команде ps" }
   ],
   "solution": ["man ps"],
   "hint": "man — от слова manual, «руководство»: man ps"
@@ -94,6 +97,7 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```quiz
 {
+  "id": "q0",
   "question": "Чем процесс отличается от программы?",
   "options": ["Ничем", "Программа — файл на диске, процесс — запущенная её копия со своим PID и памятью", "Программа быстрее процесса"],
   "answer": 1,
@@ -103,6 +107,7 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```quiz
 {
+  "id": "q1",
   "question": "Что такое PID 1?",
   "options": ["Первый созданный тобой файл", "Процесс systemd, прародитель всех остальных процессов", "Команда для просмотра процессов"],
   "answer": 1,
@@ -112,6 +117,7 @@ ps aux | grep nginx   # оставить только строки про nginx
 
 ```quiz
 {
+  "id": "q2",
   "question": "Ты запустил «sleep 100 &». Что произошло?",
   "options": ["Команда выполнится в фоне, а терминал сразу вернётся к приглашению", "Команда не запустится", "Система выключится через 100 секунд"],
   "answer": 0,

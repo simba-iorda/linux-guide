@@ -18,15 +18,8 @@ function abbreviateCwd(cwd) {
   return cwd;
 }
 
-export function formatPrompt(shell, cwd) {
-  const d = abbreviateCwd(cwd);
-  switch (shell) {
-    case 'fish': return `user@linux ${d}>`;
-    case 'zsh': return `${d} ❯`;
-    case 'bash':
-    default:
-      return `user@linux:${d}$`;
-  }
+export function formatPrompt(cwd) {
+  return `user@linux:${abbreviateCwd(cwd)}$`;
 }
 
 /* ---------- таблицы: честный ASCII/box-drawing рендер ---------- */
@@ -254,6 +247,7 @@ function createTaskBlock({ task, hint, solution }) {
         appendLineToOutput(l, className);
       });
     },
+    clearOutput() { output.replaceChildren(); },
     showHint() { hintEl.classList.remove('hidden'); },
     showSolution() { solutionEl.classList.remove('hidden'); },
     markDone() { successEl.classList.remove('hidden'); }
@@ -274,7 +268,7 @@ function createDoneTaskBlock({ task }) {
   return { element: root };
 }
 
-function createQuizBlock(data) {
+function createQuizBlock(data, onAnswer) {
   const root = document.createElement('div');
   root.className = 'quiz-block';
 
@@ -283,11 +277,13 @@ function createQuizBlock(data) {
   q.textContent = `[?] ${data.question}`;
   root.appendChild(q);
 
-  const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const LETTERS = ['а', 'б', 'в', 'г', 'д', 'е'];
   data.options.forEach((opt, i) => {
-    const line = document.createElement('div');
+    const line = document.createElement('button');
+    line.type = 'button';
     line.className = 'line quiz-option';
     line.textContent = `${LETTERS[i]}) ${opt}`;
+    line.addEventListener('click', () => onAnswer(LETTERS[i]));
     root.appendChild(line);
   });
 
@@ -302,6 +298,7 @@ function createQuizBlock(data) {
       feedback.textContent = msg;
     },
     showCorrect(explanation) {
+      root.querySelectorAll('button').forEach(button => { button.disabled = true; });
       feedback.className = 'line quiz-feedback success';
       feedback.textContent = explanation ? `Верно — ${explanation}` : 'Верно';
     }
@@ -315,7 +312,7 @@ function createDoneQuizBlock(data) {
   q.className = 'line quiz-question';
   q.textContent = `[?] ${data.question}`;
   root.appendChild(q);
-  const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const LETTERS = ['а', 'б', 'в', 'г', 'д', 'е'];
   data.options.forEach((opt, i) => {
     const line = document.createElement('div');
     line.className = 'line quiz-option';
@@ -335,30 +332,25 @@ function createDoneQuizBlock(data) {
   return { element: root };
 }
 
-export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
+export function createTerminalUI({ onSubmit, onClear, getAutocompleteSession }) {
   const scrollback = document.getElementById('scrollback');
   const form = document.getElementById('prompt-form');
   const input = document.getElementById('command-input');
   const prompt = document.getElementById('prompt-display');
-  const ghost = document.getElementById('input-ghost');
   const terminal = document.querySelector('.terminal');
 
-  let shell = 'bash';
   let cwd = '/home/user';
   let history = [];
   let historyIndex = -1;
-  let ghostText = '';
   let userScrolling = false;
   let scrollTimer = null;
   let enabled = true;
   let autoScroll = true;
-  let onScrollCallback = null;
   const tableBlocks = new Set();
 
-  function setPrompt(newShell, newCwd) {
-    shell = newShell || shell;
+  function setPrompt(newCwd) {
     cwd = newCwd || cwd;
-    prompt.textContent = formatPrompt(shell, cwd) + ' ';
+    prompt.textContent = formatPrompt(cwd) + ' ';
   }
 
   function appendLine(text, className = 'output') {
@@ -414,33 +406,19 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     input.disabled = !value;
   }
 
-  function updateGhost() {
-    ghostText = '';
-    ghost.textContent = '';
-    input.style.width = Math.max(1, input.value.length) + 'ch';
-    if (shell !== 'fish') return;
-    const val = input.value;
-    if (!val) return;
-    const session = getAutocompleteSession ? getAutocompleteSession() : null;
-    if (!session) return;
-    const match = [...session.history].reverse().find(h => h.startsWith(val) && h.length > val.length);
-    if (match) {
-      ghostText = match.slice(val.length);
-      ghost.textContent = ghostText;
-    }
-  }
-
-  function acceptGhost() {
-    if (ghostText) {
-      input.value += ghostText;
-      updateGhost();
-      return true;
-    }
-    return false;
-  }
-
   function clearScrollback() {
-    scrollback.innerHTML = '';
+    scrollback.replaceChildren();
+    tableBlocks.clear();
+  }
+
+  function complete() {
+    const session = getAutocompleteSession();
+    if (!session || !input.value.trim()) return false;
+    const result = globalThis.TerminalSimulator.autocomplete(session, input.value);
+    if (!result.list.length) return false;
+    if (result.list.length === 1) input.value = result.suggestion + (result.directory ? '' : ' ');
+    else appendLine(result.list.join('  '), 'comment');
+    return true;
   }
 
   // Scroll detection: don't auto-scroll while user is looking up.
@@ -454,11 +432,10 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
 
   // Tap/click в терминал = фокус ввода.
   function focusInput(e) {
-    if (e && e.target.closest('button, a, input, textarea, select')) return;
+    if (e && e.target.closest('button, a, input, textarea, select, summary, [tabindex]')) return;
     if (typeof window !== 'undefined' && window.getSelection().toString()) return;
     focus();
   }
-  scrollback.addEventListener('click', focusInput);
   if (terminal) terminal.addEventListener('click', focusInput);
 
   form.addEventListener('submit', (e) => {
@@ -470,11 +447,8 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
       historyIndex = history.length;
     }
     input.value = '';
-    updateGhost();
     if (onSubmit && value.trim() !== '') onSubmit(value);
   });
-
-  input.addEventListener('input', updateGhost);
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -486,8 +460,7 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
       if (historyIndex > 0) {
         historyIndex--;
         input.value = history[historyIndex];
-        updateGhost();
-      }
+          }
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -495,58 +468,34 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
       if (historyIndex < history.length - 1) {
         historyIndex++;
         input.value = history[historyIndex];
-        updateGhost();
-      } else {
+          } else {
         historyIndex = history.length;
         input.value = '';
-        updateGhost();
-      }
+          }
       return;
     }
-    if (e.key === 'Tab') {
+    if (e.key === 'Tab' && !e.shiftKey && complete()) {
       e.preventDefault();
-      if (shell === 'fish' && acceptGhost()) return;
-      const session = getAutocompleteSession ? getAutocompleteSession() : null;
-      if (!session) return;
-      const Simulator = globalThis.TerminalSimulator;
-      if (!Simulator || !Simulator.autocomplete) return;
-      const res = Simulator.autocomplete(session, input.value);
-      if (res.list.length === 1) {
-        input.value = res.suggestion + ' ';
-        updateGhost();
-      } else if (res.list.length > 1) {
-        appendLine(res.list.join('  '), 'comment');
-      }
       return;
     }
     if (e.key === 'l' && e.ctrlKey) {
       e.preventDefault();
-      clearScrollback();
-      return;
+      onClear();
     }
   });
+
+  terminal.querySelectorAll('[data-key]').forEach(button => button.addEventListener('click', () => {
+    focus();
+    if (button.dataset.key === 'Tab') complete();
+    else input.dispatchEvent(new KeyboardEvent('keydown', { key: button.dataset.key }));
+  }));
 
   function appendComment(text) { appendLine(text, 'comment'); }
   function appendSuccess(text) { appendLine(text, 'success'); }
   function appendError(text) { appendLine(text, 'error'); }
 
-  function appendAnchor() {
-    const el = document.createElement('div');
-    el.className = 'lesson-anchor';
-    el.style.height = '0';
-    scrollback.appendChild(el);
-    return el;
-  }
-
-  function scrollToElement(el) {
-    if (!el || !scrollback.contains(el)) return;
-    scrollback.scrollTop = el.offsetTop - scrollback.offsetTop;
-  }
-
   function getScrollTop() { return scrollback.scrollTop; }
   function setScrollTop(y) { scrollback.scrollTop = y; }
-  function getScrollHeight() { return scrollback.scrollHeight; }
-  function getClientHeight() { return scrollback.clientHeight; }
 
   function getTableMaxWidth() {
     if (!scrollback) return 100;
@@ -606,14 +555,6 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     });
   }
 
-  function onScroll(cb) {
-    onScrollCallback = cb;
-  }
-
-  scrollback.addEventListener('scroll', () => {
-    if (onScrollCallback) onScrollCallback(scrollback.scrollTop);
-  }, { passive: true });
-
   return {
     setPrompt,
     appendLine,
@@ -623,12 +564,8 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     appendSuccess,
     appendError,
     appendRaw,
-    appendAnchor,
-    scrollToElement,
     getScrollTop,
     setScrollTop,
-    getScrollHeight,
-    getClientHeight,
     createTableBlock,
     createTaskBlock,
     createDoneTaskBlock,
@@ -636,11 +573,9 @@ export function createTerminalUI({ onSubmit, getAutocompleteSession }) {
     createDoneQuizBlock,
     getScrollback: () => scrollback,
     setAutoScroll,
-    onScroll,
+    scrollToBottom() { scrollback.scrollTop = scrollback.scrollHeight; },
     clearScrollback,
     focus,
-    setEnabled,
-    shell: () => shell,
-    cwd: () => cwd
+    setEnabled
   };
 }

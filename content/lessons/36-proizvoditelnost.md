@@ -56,12 +56,12 @@ df -h                  # не кончилось ли место
 
 ```terminal
 {
+  "id": "t0",
   "title": "Сколько памяти",
   "task": "Посмотри память и swap: free -h. Ориентируйся на столбец available, а не на free.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "диагностика\n" } },
   "check": [
-    { "type": "output_contains", "text": "Mem", "message": "видна строка памяти" }
+    { "type": "output_contains", "commands": ["free"], "text": "Mem", "message": "видна строка памяти" }
   ],
   "solution": ["free -h"],
   "hint": "Столбец available — сколько реально доступно программам"
@@ -70,12 +70,12 @@ df -h                  # не кончилось ли место
 
 ```terminal
 {
+  "id": "t1",
   "title": "Место на дисках",
   "task": "Проверь заполнение разделов: df -h. Заодно посмотри процент в столбце Use%.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "диагностика\n" } },
   "check": [
-    { "type": "output_contains", "text": "Filesystem", "message": "видна таблица разделов" }
+    { "type": "output_contains", "commands": ["df"], "text": "Filesystem", "message": "видна таблица разделов" }
   ],
   "solution": ["df -h"],
   "hint": "df = disk free, -h = человекочитаемые единицы"
@@ -84,12 +84,12 @@ df -h                  # не кончилось ли место
 
 ```terminal
 {
+  "id": "t2",
   "title": "Кто в системе",
   "task": "Посмотри список процессов: ps aux. Дальше по этому списку обычно ищут виновника тормозов.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "диагностика\n" } },
   "check": [
-    { "type": "output_contains", "text": "sleep", "message": "виден список процессов, среди них sleep с его PID" }
+    { "type": "output_contains", "commands": ["ps"], "text": "sleep", "message": "виден список процессов, среди них sleep с его PID" }
   ],
   "solution": ["ps aux"],
   "hint": "ps — снимок процессов на момент запуска"
@@ -98,12 +98,12 @@ df -h                  # не кончилось ли место
 
 ```terminal
 {
+  "id": "t3",
   "title": "Что за система",
   "task": "Заодно уточни ядро и архитектуру: uname -a.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "notes.txt": "диагностика\n" } },
   "check": [
-    { "type": "output_contains", "text": "Linux", "message": "видно имя системы Linux" }
+    { "type": "output_contains", "commands": ["uname"], "text": "Linux", "message": "видно имя системы Linux" }
   ],
   "solution": ["uname -a"],
   "hint": "-a значит «всё»"
@@ -114,6 +114,7 @@ df -h                  # не кончилось ли место
 
 ```quiz
 {
+  "id": "q0",
   "question": "load average равен 8 на четырёхъядерной машине. Что это значит?",
   "options": ["В среднем 8 задач хотят выполняться при 4 ядрах — есть очередь", "Процессор работает на 50%", "Свободно 8 ГБ памяти"],
   "answer": 0,
@@ -123,6 +124,7 @@ df -h                  # не кончилось ли место
 
 ```quiz
 {
+  "id": "q1",
   "question": "Какой столбец free показывает память, реально доступную программам?",
   "options": ["available", "total", "used"],
   "answer": 0,
@@ -132,6 +134,7 @@ df -h                  # не кончилось ли место
 
 ```quiz
 {
+  "id": "q2",
   "question": "Колонка wa в vmstat стабильно высокая, а CPU свободен. На что смотреть?",
   "options": ["На диск: процессы ждут ввода-вывода", "На память: кончилась RAM", "На сеть: упал канал"],
   "answer": 0,
@@ -141,6 +144,7 @@ df -h                  # не кончилось ли место
 
 ```quiz
 {
+  "id": "q3",
   "question": "Где искать следы OOM killer?",
   "options": ["В dmesg (dmesg -T | tail)", "В /etc/fstab", "В crontab -l"],
   "answer": 0,

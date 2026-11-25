@@ -73,6 +73,7 @@ less big_file.txt
 
 ```terminal
 {
+  "id": "t0",
   "title": "Файл целиком",
   "task": "Выведи на экран содержимое файла notes.txt командой cat.",
   "setup": {
@@ -80,7 +81,7 @@ less big_file.txt
     "tree": { "notes.txt": "Первое правило: проверить дважды\n" }
   },
   "check": [
-    { "type": "output_contains", "text": "Первое правило", "message": "содержимое файла видно" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "Первое правило", "message": "содержимое файла видно" }
   ],
   "solution": ["cat notes.txt"],
   "hint": "cat принимает имя файла: cat notes.txt"
@@ -89,6 +90,7 @@ less big_file.txt
 
 ```terminal
 {
+  "id": "t1",
   "title": "Первые две строки",
   "task": "Выведи первые две строки файла lines.txt.",
   "setup": {
@@ -96,7 +98,7 @@ less big_file.txt
     "tree": { "lines.txt": "строка альфа\nстрока бета\nстрока гамма\nстрока дельта\n" }
   },
   "check": [
-    { "type": "output_contains", "text": "строка бета", "message": "видна вторая строка" }
+    { "type": "output_contains", "commands": ["head"], "text": "строка бета", "message": "видна вторая строка" }
   ],
   "solution": ["head -n 2 lines.txt"],
   "hint": "head -n 2 покажет ровно две строки сверху."
@@ -105,6 +107,7 @@ less big_file.txt
 
 ```terminal
 {
+  "id": "t2",
   "title": "Последняя строка лога",
   "task": "В файле app.log самое свежее — внизу. Выведи последние две строки файла.",
   "setup": {
@@ -114,7 +117,7 @@ less big_file.txt
     }
   },
   "check": [
-    { "type": "output_contains", "text": "остановка", "message": "видна последняя строка" }
+    { "type": "output_contains", "commands": ["tail"], "text": "остановка", "message": "видна последняя строка" }
   ],
   "solution": ["tail -n 2 app.log"],
   "hint": "tail смотрит с конца файла. Нужны две строки — tail -n 2."
@@ -123,6 +126,7 @@ less big_file.txt
 
 ```terminal
 {
+  "id": "t3",
   "title": "Сколько строк",
   "task": "Посчитай, сколько строк в файле lines.txt командой wc -l.",
   "setup": {
@@ -130,7 +134,7 @@ less big_file.txt
     "tree": { "lines.txt": "один\nдва\nтри\nчетыре\n" }
   },
   "check": [
-    { "type": "output_contains", "text": "4", "message": "выведено число строк" }
+    { "type": "output_contains", "commands": ["wc"], "text": "4", "message": "выведено число строк" }
   ],
   "solution": ["wc -l lines.txt"],
   "hint": "wc -l печатает количество строк и имя файла. Нужное число — первое."
@@ -139,6 +143,7 @@ less big_file.txt
 
 ```terminal
 {
+  "id": "t4",
   "title": "Склеиваем два файла",
   "task": "Выведи подряд содержимое part1.txt и part2.txt одной командой cat, чтобы текст шёл сначала из первого, потом из второго.",
   "setup": {
@@ -149,8 +154,8 @@ less big_file.txt
     }
   },
   "check": [
-    { "type": "output_contains", "text": "Начало истории", "message": "виден текст первого файла" },
-    { "type": "output_contains", "text": "Конец истории", "message": "виден текст второго файла" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "Начало истории", "message": "виден текст первого файла" },
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "Конец истории", "message": "виден текст второго файла" }
   ],
   "solution": ["cat part1.txt part2.txt"],
   "hint": "cat умеет принимать несколько файлов: cat part1.txt part2.txt склеит их вывод."
@@ -161,6 +166,7 @@ less big_file.txt
 
 ```quiz
 {
+  "id": "q0",
   "question": "Какая команда покажет последние строки файла?",
   "options": ["head -n 10 app.log", "tail -n 10 app.log", "cat app.log"],
   "answer": 1,
@@ -170,6 +176,7 @@ less big_file.txt
 
 ```quiz
 {
+  "id": "q1",
   "question": "Чем опасен cat на большом файле в несколько сотен мегабайт?",
   "options": [
     "Он удалит файл",
@@ -183,6 +190,7 @@ less big_file.txt
 
 ```quiz
 {
+  "id": "q2",
   "question": "Что выведет wc -l notes.txt?",
   "options": [
     "Слова в файле",
@@ -196,6 +204,7 @@ less big_file.txt
 
 ```quiz
 {
+  "id": "q3",
   "question": "Что значит cat part1.txt part2.txt?",
   "options": [
     "Выведет содержимое двух файлов подряд: сначала part1, потом part2",

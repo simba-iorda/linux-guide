@@ -88,6 +88,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```terminal
 {
+  "id": "t0",
   "title": "Записываем текст в файл",
   "task": "Создай файл greeting.txt, в котором будет строка Привет, Linux! Используй echo и перенаправление в файл.",
   "setup": { "cwd": "/home/user", "tree": { "README.txt": "Добро пожаловать\n" } },
@@ -102,6 +103,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```terminal
 {
+  "id": "t1",
   "title": "Дописываем, не теряя старое",
   "task": "В файле blog.txt уже есть строка Первая запись. Допиши в конец вторую: Вторая запись. Первая строка должна остаться.",
   "setup": { "cwd": "/home/user", "tree": { "blog.txt": "Первая запись\n" } },
@@ -116,6 +118,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```terminal
 {
+  "id": "t2",
   "title": "Первая труба",
   "task": "Передай содержимое файла app.log команде grep и оставь только строки со словом error — всё одной командой с пайпом.",
   "setup": {
@@ -125,7 +128,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
     }
   },
   "check": [
-    { "type": "output_contains", "text": "disk full", "message": "строка с ошибкой дошла до вывода" }
+    { "type": "output_contains", "commands": ["grep"], "text": "disk full", "message": "строка с ошибкой дошла до вывода" }
   ],
   "solution": ["cat app.log | grep \"error\""],
   "hint": "cat app.log | grep \"error\": вывод cat идёт на вход grep."
@@ -134,6 +137,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```terminal
 {
+  "id": "t3",
   "title": "Считаем через трубу",
   "task": "Посчитай, сколько строк в файле list.txt, передав его содержимое команде wc -l через пайп.",
   "setup": {
@@ -141,7 +145,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
     "tree": { "list.txt": "молоко\nхлеб\nсыр\nяйца\nмасло\n" }
   },
   "check": [
-    { "type": "output_contains", "text": "5", "message": "выведено число строк" }
+    { "type": "output_contains", "commands": ["wc"], "text": "5", "message": "выведено число строк" }
   ],
   "solution": ["cat list.txt | wc -l"],
   "hint": "cat list.txt | wc -l: cat отдаёт файл, wc считает строки."
@@ -150,6 +154,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```terminal
 {
+  "id": "t4",
   "title": "Конвейер из трёх команд",
   "task": "Соедини три команды: прочитай app.log, оставь строки со словом error и посчитай их количество. В ответе должно получиться одно число.",
   "setup": {
@@ -159,7 +164,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
     }
   },
   "check": [
-    { "type": "output_contains", "text": "2", "message": "выведено количество ошибок" }
+    { "type": "output_contains", "commands": ["wc"], "text": "2", "message": "выведено количество ошибок" }
   ],
   "solution": ["cat app.log | grep \"error\" | wc -l"],
   "hint": "cat app.log | grep \"error\" | wc -l — три команды, две трубы."
@@ -170,6 +175,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```quiz
 {
+  "id": "q0",
   "question": "Что делает символ | в команде cat app.log | grep error?",
   "options": [
     "Направляет вывод cat на вход команде grep",
@@ -183,6 +189,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```quiz
 {
+  "id": "q1",
   "question": "Чем >> отличается от >?",
   "options": [
     ">> дописывает в конец файла, а > перезаписывает его",
@@ -196,6 +203,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```quiz
 {
+  "id": "q2",
   "question": "Ты написал echo \"текст\" > notes.txt, где уже была важная запись. Что произошло?",
   "options": [
     "Запись добавилась в конец, старая цела",
@@ -209,6 +217,7 @@ cat app.log | grep "error" | wc -l     # прочитать → отфильтр
 
 ```quiz
 {
+  "id": "q3",
   "question": "Что произойдёт при выполнении cat app.log | grep error | wc -l?",
   "options": [
     "Выведется число строк в app.log, содержащих error",

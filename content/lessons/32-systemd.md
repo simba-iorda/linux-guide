@@ -70,16 +70,16 @@ sudo systemctl enable --now myapp
 
 ## Попробуй
 
-В симуляторе нет `systemctl`, поэтому потренируемся читать unit-файл — то, что ты будешь делать в реальности при разборе чужой службы.
+В первых заданиях прочитаем unit-файл. Потом попробуем запуск учебной службы через `systemctl`.
 
 ```terminal
 {
+  "id": "t0",
   "title": "Читаем unit-файл",
   "task": "Прочитай описание службы: cat myapp.service. Найди секцию [Service] и строку ExecStart.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "myapp.service": "[Unit]\nDescription=My App\nAfter=network.target\n\n[Service]\nUser=app\nWorkingDirectory=/opt/myapp\nExecStart=/usr/bin/python3 app.py\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n" } },
   "check": [
-    { "type": "output_contains", "text": "[Service]", "message": "секция [Service] найдена" }
+    { "type": "output_contains", "commands": ["cat", "head", "tail"], "text": "[Service]", "message": "секция [Service] найдена" }
   ],
   "solution": ["cat myapp.service"],
   "hint": "cat выводит файл целиком"
@@ -88,12 +88,12 @@ sudo systemctl enable --now myapp
 
 ```terminal
 {
+  "id": "t1",
   "title": "Что именно запускается",
   "task": "Вытащи только строку запуска: grep ExecStart myapp.service. Именно эту команду systemd выполнит при старте.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "myapp.service": "[Unit]\nDescription=My App\n\n[Service]\nUser=app\nExecStart=/usr/bin/python3 app.py\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n" } },
   "check": [
-    { "type": "output_contains", "text": "ExecStart", "message": "команда запуска найдена" }
+    { "type": "output_contains", "commands": ["grep"], "text": "ExecStart", "message": "команда запуска найдена" }
   ],
   "solution": ["grep ExecStart myapp.service"],
   "hint": "grep печатает строки с указанным словом"
@@ -102,15 +102,46 @@ sudo systemctl enable --now myapp
 
 ```terminal
 {
+  "id": "t2",
   "title": "Кому доверено",
   "task": "Проверь, от какого пользователя запустится служба: grep User myapp.service.",
-  "shell": "bash",
   "setup": { "cwd": "/home/user", "tree": { "myapp.service": "[Unit]\nDescription=My App\n\n[Service]\nUser=app\nWorkingDirectory=/opt/myapp\nExecStart=/usr/bin/python3 app.py\n\n[Install]\nWantedBy=multi-user.target\n" } },
   "check": [
-    { "type": "output_contains", "text": "app", "message": "пользователь службы найден" }
+    { "type": "output_contains", "commands": ["grep"], "text": "app", "message": "пользователь службы найден" }
   ],
   "solution": ["grep User myapp.service"],
   "hint": "grep напечатает строки, где встречается слово User"
+}
+```
+
+```terminal
+{
+  "id": "start-study-service",
+  "task": "Учебная служба study остановлена. Конфигурация уже готова. Запусти службу.",
+  "setup": {
+    "tree": {
+      "study.conf": "enabled=yes\n"
+    },
+    "services": {
+      "study": {
+        "state": "inactive",
+        "requires": "study.conf",
+        "expected": "enabled=yes",
+        "log": []
+      }
+    }
+  },
+  "check": [
+    {
+      "type": "service_state",
+      "name": "study",
+      "state": "active"
+    }
+  ],
+  "solution": [
+    "systemctl start study"
+  ],
+  "hint": "Для запуска используется действие start."
 }
 ```
 
@@ -118,6 +149,7 @@ sudo systemctl enable --now myapp
 
 ```quiz
 {
+  "id": "q0",
   "question": "Чем enable отличается от start?",
   "options": ["enable добавляет в автозапуск, start запускает сейчас", "Это одно и то же", "enable перезапускает службу"],
   "answer": 0,
@@ -127,6 +159,7 @@ sudo systemctl enable --now myapp
 
 ```quiz
 {
+  "id": "q1",
   "question": "Ты поправил myapp.service, но служба работает по-старому. Что забыл?",
   "options": ["sudo systemctl daemon-reload", "sudo reboot", "chmod 777 myapp.service"],
   "answer": 0,
@@ -136,6 +169,7 @@ sudo systemctl enable --now myapp
 
 ```quiz
 {
+  "id": "q2",
   "question": "Куда кладут свои unit-файлы?",
   "options": ["/etc/systemd/system/", "/usr/lib/systemd/system/", "/var/log/systemd/"],
   "answer": 0,
@@ -145,6 +179,7 @@ sudo systemctl enable --now myapp
 
 ```quiz
 {
+  "id": "q3",
   "question": "Что покажет systemctl --failed?",
   "options": ["Службы, которые не смогли запуститься", "Список удалённых пакетов", "Свободное место на диске"],
   "answer": 0,
